@@ -796,4 +796,4 @@ async def pick(ctx: discord_slash.SlashContext, pickedplayer):
 
 ###################################################################################################################
 
-bot.run('OTE4OTg4MzQyNzg2NDA0NDIz.YbPQlg.yqYFx-Pm12sic3HpzJFCIRBdIBg')
+bot.run('')
