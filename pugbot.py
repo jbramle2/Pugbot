@@ -13,6 +13,11 @@ slash = discord_slash.SlashCommand(bot, sync_commands=True)  # sync_commands is 
 conn = sqlite3.connect("pugbotdb.db")
 c = conn.cursor()
 
+with open('token.txt','r') as t:
+    discordtoken = t.read()
+
+print(discordtoken)
+
 runninglist = []
 
 
@@ -309,7 +314,7 @@ async def countdown(time, chan, chanid, server, modname):
     conn.commit()
 
 #get pick orders
-#!#!#!# This sucks. Figure out how to generate
+#!#!#!# Figure out how to generate
 async def getpickorders(playerlimit, pickorder):
 
     redorder = []
@@ -411,7 +416,7 @@ async def delmod(ctx: discord_slash.SlashContext, gametype):
 ### JOIN PUG
 ###################################################################################################################
 
-@slash.slash(name="j", description="Join a pug",  # Adding a new slash command with our slash variable
+@slash.slash(name="j", description="Join a pug",
              options=[discord_slash.manage_commands.create_option(
                  name="gametype",
                  description="enter the pug to join",
@@ -796,4 +801,4 @@ async def pick(ctx: discord_slash.SlashContext, pickedplayer):
 
 ###################################################################################################################
 
-bot.run('')
+bot.run(str(discordtoken))
