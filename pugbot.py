@@ -2,6 +2,8 @@ import discord  # Import the original discord.py module
 # from discord.ext import commands  # Import the discord.py extension "commands"
 # import discord_slash  # Import the third-party extension discord_slash module
 from disnake.ext import commands
+from discord.ui import button, Button, View
+from discord.interactions import Interaction
 import sqlite3
 import asyncio
 import random
@@ -31,6 +33,7 @@ async def on_ready():
 
 
 ###################################################################################################################
+
 
 ########
 ############## Functions
@@ -117,12 +120,19 @@ def listpicks(gametype):
     modnameparsed = 'temp'
 
     # print(modnameparsed)
+    #!#!#!#!#!#!#!#!#! ROW ID NEEDS TO BE AN ACTUAL PICK INDEX VARIABLE IN COLUMN  #!#!#!#!#!#!#!#!
 
-    c.execute("SELECT rowid, playername FROM " + modnameparsed + " WHERE pickorder is NULL")
+    c.execute("SELECT rowid, playername FROM " + modnameparsed + " WHERE pickorder is 0 AND captain IS NULL")
 
     response = c.fetchall()
     response1 = str(response[0])
     # print('test: ' + response1)
+
+    print(response)
+    c.execute("SELECT rowid FROM " + modnameparsed + " WHERE pickorder is 0 AND captain IS NULL")
+    pickindex = c.fetchall()
+    final_result = [i[0] for i in pickindex]
+    print(final_result)
 
     # print(response)
 
@@ -146,7 +156,7 @@ def listpicks(gametype):
 
     ###await ctx.channel.send(f'{parsedresponse} ')
 
-    return (parsedresponse)
+    return (parsedresponse, final_result)
 
 
 ######## Lists players on team
@@ -302,16 +312,16 @@ async def countdown(time, chan, chanid, server, modname):
         content=f'**Random captains selected** \n Red Team: <@{xparsed1}> \n Blue Team: <@{xparsed2}>'
                 f' \n <@{xparsed1}> to pick')
 
-    ####### Assign captains 0 pick order
-    c.execute("UPDATE temp SET pickorder = 0 WHERE playername = '" + xparsed1 + "'")
+    ####### Assign captains 1 or 2
+    c.execute("UPDATE temp SET captain = 1 WHERE players = '" + xparsed1 + "'")
     conn.commit()
-    c.execute("UPDATE temp SET pickorder = 0 WHERE playername = '" + xparsed2 + "'")
+    c.execute("UPDATE temp SET captain = 2 WHERE players = '" + xparsed2 + "'")
     conn.commit()
 
     ####### Assign team to captains
-    c.execute("UPDATE temp SET team = 'red' WHERE playername = '" + xparsed1 + "'")
+    c.execute("UPDATE temp SET team = 'red' WHERE players = '" + xparsed1 + "'")
     conn.commit()
-    c.execute("UPDATE temp SET team = 'blue' WHERE playername = '" + xparsed2 + "'")
+    c.execute("UPDATE temp SET team = 'blue' WHERE players = '" + xparsed2 + "'")
     conn.commit()
 
 
@@ -450,7 +460,7 @@ async def join(inter, gametype: str):
 
             ####### Copy player list to temp table
             c.execute(
-                "INSERT INTO temp(server, channel, players, playername) SELECT server, channel, players, playername "
+                "INSERT INTO temp(server, serverid, channel, channelid, players, playername) SELECT server, serverid, channel, channelid, players, playername "
                 "FROM playerlist WHERE mod = '" + gametype + "' AND server = '"
                 + inter.guild.name + "' AND channel = '" + inter.channel.name + "'")
             conn.commit()
@@ -459,15 +469,21 @@ async def join(inter, gametype: str):
             c.execute("UPDATE temp SET gametype = IFNULL(gametype, '" + modname + "')")
             conn.commit()
 
+            ####### Fill team with 0
+            c.execute("UPDATE temp SET team = IFNULL(team, '0')")
+            conn.commit()
+
+            ####### Set pick orders to 0
+            c.execute("UPDATE temp SET pickorder = IFNULL(pickorder, '0')")
+            conn.commit()
+
             ### Wait for countdown
             await asyncio.sleep(5)
 
             ### List available picks
-            await inter.channel.send(f'{listpicks(gametype)} ')
+            await inter.channel.send(f'{listpicks(gametype)[0]} ')
 
         else:
-
-            ### Create a join button if not full ###
 
             parsedresponse = listplayers(gametype, inter.guild.name, inter.channel.name)
             await inter.send(f'{parsedresponse}')
@@ -524,8 +540,9 @@ async def leave(inter, gametype: str):
     if isplayerin != 1:
         await inter.send(f'{displayname} is not in the {modname} pug')
     else:
-        c.execute("DELETE FROM playerlist WHERE server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name +
-                  "' AND mod = '" + gametype + "' AND players = ('" + str(name) + "');")
+        c.execute(
+            "DELETE FROM playerlist WHERE server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name +
+            "' AND mod = '" + gametype + "' AND players = ('" + str(name) + "');")
         conn.commit()
 
         await inter.send(f'{displayname} has left the {modname} pug')
@@ -540,6 +557,7 @@ async def leave(inter, gametype: str):
 
 ### LIST PUGS
 ###################################################################################################################
+
 
 @bot.slash_command(description="List pugs")
 async def list(inter, gametype: str = None):
@@ -597,21 +615,31 @@ async def list(inter, gametype: str = None):
 
 ###################################################################################################################
 
-### PICKING
+### PICKING AS FUNCTION
 ###################################################################################################################
 
-# !#!#!#!#! CHECK FOR CAPTAIN STATUS SOMEHOW!
+async def pickplayer(pickedplayer, name, server, serverid, channel, channelid):
 
-@bot.slash_command(description="Pick a player")
-async def pick(inter, pickedplayer: str):
+    global currentcaptain
 
-    name = inter.author.id
-    displayname = inter.author.name
+    print(str(pickedplayer))
+    print(str(name))
+    print(str(server))
+    print(str(serverid))
+    print(str(channel))
+    print(str(channelid))
 
     c.execute("SELECT gametype FROM temp WHERE players = " + str(name) +
-              " AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "'")
+              " AND serverid = '" + str(serverid) + "' AND channelid = '" + str(channelid) + "'")
+
+    print(channelid)
+    print(channel)
+    print(str(channel))
+    print("serverid: " + str(serverid))
     gametype = c.fetchall()
+    print(gametype)
     modname = gametype
+    print(modname)
 
     parsedmodname = str(modname[0]).replace('(', '')
     parsedmodname = parsedmodname.replace(')', '')
@@ -630,7 +658,7 @@ async def pick(inter, pickedplayer: str):
     hasteamint = hasteam[0]
 
     if hasteamint:
-        await inter.send('player already picked')
+        await channel.send('player already picked')
     else:
         c.execute("SELECT players FROM temp WHERE ROWID = " + pickedplayer + "")
         pickedplayer = c.fetchall()
@@ -654,7 +682,7 @@ async def pick(inter, pickedplayer: str):
         parsedhighpick = parsedhighpick.replace(']', '')
         parsedhighpick = parsedhighpick.replace('[', '')
 
-        # print(parsedhighpick)
+        print(parsedhighpick)
 
         highpick = int(parsedhighpick) + 1
 
@@ -664,14 +692,16 @@ async def pick(inter, pickedplayer: str):
         conn.commit()
 
         ##### Retrive pick orders #!#!#! Still need to generate somehow
-
+        print(str(server))
         c.execute("SELECT playerlimit FROM modsettings WHERE channelid = '" + str(
-            inter.channel.id) + "' AND serverid = '" + str(inter.guild.id) + "' AND mod= '" + parsedmodname + "'")
+            channelid) + "' AND serverid = '" + str(482012169911664640) + "' AND mod= '" + parsedmodname + "'")
         playerlimit = c.fetchone()
+        print(playerlimit)
         c.execute(
-            "SELECT pickorder FROM modsettings WHERE channelid = '" + str(inter.channel.id) + "' AND serverid = '" + str(
-                inter.guild.id) + "' AND mod= '" + parsedmodname + "'")
+            "SELECT pickorder FROM modsettings WHERE channelid = '" + str(channelid) + "' AND serverid = '" + str(
+                482012169911664640) + "' AND mod= '" + parsedmodname + "'")
         pickorder = c.fetchone()
+        print(pickorder)
 
         redorder, blueorder = await getpickorders(playerlimit[0], pickorder)
         print(redorder)
@@ -680,9 +710,19 @@ async def pick(inter, pickedplayer: str):
         if highpick in redorder:
             c.execute("UPDATE temp SET team = 'red' WHERE players = '" + parsedpickedplayer + "'")
             conn.commit()
+
+            c.execute("SELECT playername FROM temp WHERE captain = 2")
+
+            currentcaptain = c.fetchone()
+            print(currentcaptain)
+
         elif highpick in blueorder:
             c.execute("UPDATE temp SET team = 'blue' WHERE players = '" + parsedpickedplayer + "'")
             conn.commit()
+
+            c.execute("SELECT playername FROM temp WHERE captain = 1")
+            currentcaptain = c.fetchone()
+            print(currentcaptain)
 
         if highpick == (playerlimit[0] - 3):
             print("assigning last player")
@@ -697,14 +737,14 @@ async def pick(inter, pickedplayer: str):
             else:
                 lessteam = 'blue'
 
-            c.execute("UPDATE temp SET team = '" + lessteam + "' WHERE team is NULL")
+            c.execute("UPDATE temp SET team = '" + lessteam + "' WHERE team = '0'")
             conn.commit()
-            c.execute("UPDATE temp SET pickorder = '" + str(highpick + 1) + "' WHERE pickorder is NULL")
+            c.execute("UPDATE temp SET pickorder = '" + str(highpick + 1) + "' WHERE pickorder is '0'")
             conn.commit()
 
             redpicks = listteampicks(parsedmodname, 'red')
             bluepicks = listteampicks(parsedmodname, 'blue')
-            await inter.send(f' Teams have been chosen \n **Red Team: ** {redpicks} \n **Blue Team: ** {bluepicks} ')
+            await channel.send(f' Teams have been chosen \n **Red Team: ** {redpicks} \n **Blue Team: ** {bluepicks} ')
 
             # Send to history
 
@@ -728,42 +768,100 @@ async def pick(inter, pickedplayer: str):
 
             # Delete from temp picking table
 
-            c.execute("DELETE from temp WHERE gametype = '" + parsedmodname +
-                      "' AND server = '" + inter.guild.name +
-                      "' AND channel = '" + inter.channel.name + "'")
+            c.execute("DELETE from temp WHERE gametype = '" + str(parsedmodname) +
+                      "' AND serverid = '" + str(serverid) +
+                      "' AND channelid = '" + str(channelid) + "'")
             conn.commit()
 
             return
 
         # List remaining players
-        remaining = listpicks(parsedmodname)
+        remaining = listpicks(parsedmodname)[0]
+        print("remaining: " + remaining)
 
         redpicks = listteampicks(parsedmodname, 'red')
         bluepicks = listteampicks(parsedmodname, 'blue')
 
         # print(redpicks)
+        print('CURRENT CAPTAIN: ' + str(currentcaptain[0]))
+        message = await channel.send(f'{remaining} \n **Red Team: ** {redpicks} \n **Blue Team: ** {bluepicks} \n @' + currentcaptain[
+            0] + ' TO PICK ')
 
-        await inter.send(f'{remaining} \n **Red Team: ** {redpicks} \n **Blue Team: ** {bluepicks} \n @____ TO PICK ')
+        remaining_indexes = listpicks(parsedmodname)[1]
+        print(str(remaining_indexes))
+
+        reactionpool = ['0️⃣','1️⃣','2️⃣','3️⃣','4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣','🔟']
+
+        for i in range(0,len(remaining_indexes)):
+            await message.add_reaction(reactionpool[remaining_indexes[i]])
 
         ### remove timeout task for players in filled pug
         # !#!#! Consider moving to completed picking
         # !#!#! May be broken. need to test with real players
         c.execute(
-            "SELECT players FROM playerlist WHERE mod='" + gametype + "' AND serverid = '" + str(
-                inter.guild.id) + "' AND channelid = '" + str(inter.channel.id) + "'")
+            "SELECT players FROM playerlist WHERE mod='" + str(parsedmodname) + "' AND serverid = '" + str(
+                serverid) + "' AND channelid = '" + str(channelid) + "'")
         playerids = c.fetchall()
-        print(playerids)
+        print("playerids " + str(playerids))
 
         playeridlist = [i[0] for i in playerids]
         print(playeridlist)
+        print(str(parsedmodname))
 
         for x in range(0, len(playeridlist)):
             print(playeridlist[x])
             task, = [task for task in asyncio.all_tasks() if
-                     task.get_name() == (str(inter.guild.id) + str(inter.channel.id) + gametype + str(playeridlist[x]))]
+                     task.get_name() == (str(serverid) + str(channelid) + str(parsedmodname) + str(playeridlist[x]))]
             task.cancel()
+    return()
 
+###################################################################################################################
+
+### PICKING
+###################################################################################################################
+
+# !#!#!#!#! CHECK FOR CAPTAIN STATUS SOMEHOW!
+
+@bot.slash_command(description="Pick a player")
+async def pick(inter, pickedplayer: str):
+
+    name = inter.author.id
+    displayname = inter.author.name
+
+    channelid = inter.channel.id
+    print(channelid)
+    channel = bot.get_channel(channelid)
+
+    await pickplayer(pickedplayer, name, inter.guild.name, inter.guild.id, channel, channelid)
 
 ##################################################################################################################
+
+@bot.event
+async def on_reaction_add(reaction, user):
+
+    channelid = reaction.message.channel.id
+    channel = bot.get_channel(channelid)
+
+    if user != bot.user:
+        if str(reaction.emoji) == '1️⃣':
+            await pickplayer('1', user.id, reaction.message.guild.name, reaction.message.guild.id, channel, channelid)
+        elif str(reaction.emoji) == '2️⃣':
+            await pickplayer('2', user.id, reaction.message.guild.name, reaction.message.guild.id, channel, channelid)
+        elif str(reaction.emoji) == '3️⃣':
+            await pickplayer('3', user.id, reaction.message.guild.name, reaction.message.guild.id, channel, channelid)
+        elif str(reaction.emoji) == '4️⃣':
+            await pickplayer('4', user.id, reaction.message.guild.name, reaction.message.guild.id, channel, channelid)
+        elif str(reaction.emoji) == '5️⃣':
+            await pickplayer('5', user.id, reaction.message.guild.name, reaction.message.guild.id, channel, channelid)
+        elif str(reaction.emoji) == '6️⃣':
+            await pickplayer('6', user.id, reaction.message.guild.name, reaction.message.guild.id, channel, channelid)
+        elif str(reaction.emoji) == '7️⃣':
+            await pickplayer('7', user.id, reaction.message.guild.name, reaction.message.guild.id, channel, channelid)
+        elif str(reaction.emoji) == '8️⃣':
+            await pickplayer('8', user.id, reaction.message.guild.name, reaction.message.guild.id, channel, channelid)
+        elif str(reaction.emoji) == '9️⃣':
+            await pickplayer('9', user.id, reaction.message.guild.name, reaction.message.guild.id, channel, channelid)
+        elif str(reaction.emoji) == '🔟':
+            await pickplayer('10', user.id, reaction.message.guild.name, reaction.message.guild.id, channel, channelid)
 
 bot.run(str(discordtoken))
