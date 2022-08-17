@@ -692,19 +692,6 @@ async def pickplayer(pickedplayer, name, server, serverid, channel, channelid):
         return()
 
 
-
-    print('highpick1: ' + str(highpick1))
-
-
-
-
-
-
-
-
-
-
-
     # !#!#!#! check for captain and pick order
 
     # !#!#!#!
@@ -897,5 +884,58 @@ async def on_reaction_add(reaction, user):
             await pickplayer('9', user.id, reaction.message.guild.name, reaction.message.guild.id, channel, channelid)
         elif str(reaction.emoji) == '🔟':
             await pickplayer('10', user.id, reaction.message.guild.name, reaction.message.guild.id, channel, channelid)
+        # elif str(reaction.emoji) == '❌':
+        #     await reset_function(user.id, reaction.message.guild.name, reaction.message.guild.id, channel, channelid)
+
+
+# async def reset_function(name, server, serverid, channel, channelid):
+#
+#     chan = bot.get_channel(int(channelid))
+#     c.execute("SELECT gametype FROM temp WHERE players = " + str(name) +
+#               " AND serverid = '" + str(serverid) + "' AND channelid = '" + str(channelid) + "'")
+#
+#     gametype = c.fetchall()
+#     #!#!#! Need to specifcy channel name and mod
+#
+#     # remove captain status and teams
+#     c.execute("UPDATE temp SET team = 0 WHERE team is NOT 0")
+#     conn.commit()
+#
+#     # remove previously assigned teams
+#     c.execute("UPDATE temp SET captain = NULL")
+#     conn.commit()
+#
+#     # start new countdown
+#     asyncio.create_task(
+#         countdown(3, chan, channelid, serverid, gametype),
+#         name=str('countdown' + str(serverid)) + str(channelid) + str(gametype)[0])
+#
+#     ### Wait for countdown
+#     await asyncio.sleep(5)
+#     await channel.send(f'{listpicks(gametype)[0]} ')
+
+@bot.slash_command(description="Reset a pug")
+async def reset(inter, gametype: str):
+
+    chan = bot.get_channel(int(inter.channel.id))
+
+    #!#!#! Need to specifcy channel name and mod
+
+    # remove captain status and teams
+    c.execute("UPDATE temp SET team = 0 WHERE team is NOT 0")
+    conn.commit()
+
+    # remove previously assigned teams
+    c.execute("UPDATE temp SET captain = NULL")
+    conn.commit()
+
+    # start new countdown
+    asyncio.create_task(
+        countdown(3, chan, inter.channel.id, inter.guild.id, gametype),
+        name=str('countdown' + str(inter.guild.id)) + str(inter.channel.id) + gametype)
+
+    ### Wait for countdown
+    await asyncio.sleep(5)
+    await inter.channel.send(f'{listpicks(gametype)[0]} ')
 
 bot.run(str(discordtoken))
