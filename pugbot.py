@@ -959,6 +959,7 @@ async def captain(inter):
     captain_count = [i[0] for i in captain_count]
     print(captain_count[0])
 
+
     if int(captain_count[0]) < 1:
         c.execute("UPDATE temp SET captain = '1' WHERE players = "+str(name)+"")
         conn.commit()
@@ -967,12 +968,25 @@ async def captain(inter):
         conn.commit()
         return ()
     elif int(captain_count[0]) == 1:
-        c.execute("UPDATE temp SET captain = '2' WHERE players = " + str(name) + "")
-        conn.commit()
-        c.execute("UPDATE temp SET team = 'blue' WHERE players = " + str(name) + "")
-        conn.commit()
-        await inter.channel.send(f"" + str(inter.author.name) + " has captained for the blue team")
-        return ()
+
+        # Get red captain
+        c.execute("SELECT players FROM temp WHERE captain = '1'")
+        captain_red = c.fetchall()
+        captain_red = [i[0] for i in captain_red]
+
+        print(captain_red[0])
+        print(inter.author.id)
+
+        if str(captain_red[0]) == str(inter.author.id):
+            await inter.channel.send(f"" + str(inter.author.name) + " is already red captain")
+            return ()
+        else:
+            c.execute("UPDATE temp SET captain = '2' WHERE players = " + str(name) + "")
+            conn.commit()
+            c.execute("UPDATE temp SET team = 'blue' WHERE players = " + str(name) + "")
+            conn.commit()
+            await inter.channel.send(f"" + str(inter.author.name) + " has captained for the blue team")
+            return ()
     elif int(captain_count[0]) == 2:
         await inter.channel.send(f'There are already 2 captains')
 
