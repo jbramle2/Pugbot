@@ -176,12 +176,15 @@ def listteampicks(gametype, team):
 
 ######## Randomly Selects Captains removes from current list
 
-def randcapt(gametype, numplayers, server, channel):
+def randcapt(gametype, numplayers, server, channel, captain_count=2):
     # !#!#!#!#!#! GENERATE LIST BASED ON numplayers!
     ####temp_list = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     # !#!#!#!#!#! GENERATE LIST BASED ON numplayers!
 
     numplayers = numplayers[0]
+
+    if captain_count == 1:
+        numplayers = numplayers - 1
 
     x = numplayers
 
@@ -191,6 +194,8 @@ def randcapt(gametype, numplayers, server, channel):
         z.append(i)
 
     temp_list = z
+
+
 
     random_id1 = random.randint(0, numplayers - 1)
     random_id2 = random.choice([ele for ele in temp_list if ele != random_id1])
@@ -202,8 +207,8 @@ def randcapt(gametype, numplayers, server, channel):
     modnameparsed = modnameparsed.replace(',', '')
 
     c.execute(
-        "SELECT players FROM playerlist WHERE mod = '" + modnameparsed + "' AND serverid = '" + str(
-            server) + "' AND channelid = '" + str(channel) + "' ;")
+        "SELECT players FROM temp WHERE gametype = '" + modnameparsed + "' AND serverid = '" + str(
+            server) + "' AND channelid = '" + str(channel) + "' AND captain IS NULL")
 
     players = c.fetchall()
 
@@ -215,6 +220,44 @@ def randcapt(gametype, numplayers, server, channel):
     playerstr2 = str(players[random_id2])
 
     return (playerstr1, playerstr2)
+
+
+########
+#
+# def rand_single_capt(gametype, numplayers, server, channel):
+#     # !#!#!#!#!#! GENERATE LIST BASED ON numplayers!
+#     ####temp_list = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+#     # !#!#!#!#!#! GENERATE LIST BASED ON numplayers!
+#
+#     numplayers = numplayers[0]
+#
+#     x = numplayers
+#
+#     z = []
+#     for i in range(x):
+#         i = i * 1
+#         z.append(i)
+#
+#     random_id1 = random.randint(0, numplayers - 1)
+#
+#     modnameparsed = str(gametype)
+#
+#     modnameparsed = modnameparsed.replace('(', '')
+#     modnameparsed = modnameparsed.replace(')', '')
+#     modnameparsed = modnameparsed.replace(',', '')
+#
+#     c.execute(
+#         "SELECT players FROM temp WHERE gametype = '" + modnameparsed + "' AND serverid = '" + str(
+#             server) + "' AND channelid = '" + str(channel) + "' AND captain IS NULL")
+#
+#     players = c.fetchall()
+#
+#     print('players: ' + str(players))
+#     print('rand1: ' + str(random_id1))
+#
+#     playerstr1 = str(players[random_id1])
+#
+#     return (playerstr1)
 
 
 ########
@@ -251,23 +294,103 @@ async def playertimer(server, chan, channelname, gametype, name):
 async def countdown(time, chan, chanid, server, modname):
     for x in range(1, time):
         if x == 1:
+
             message = await chan.send(f'{modname} has been filled \n Choosing Random Captains in ' + str(time))
             await asyncio.sleep(1)
             time = time - 1
 
+        # check for 2 captains
+
+        c.execute(
+            "SELECT COUNT(DISTINCT captain) FROM temp WHERE gametype = '" + str(modname) + "' AND channelid = '" + str(
+                chanid) + "'")
+        captain_count = c.fetchall()
+        captain_count = [i[0] for i in captain_count]
+        print(captain_count[0])
+
+        # ends countdown asyncio task if 2 captains
+
+        if captain_count[0] == 2:
+
+            # Send picking message still
+
+            c.execute(
+                "SELECT players FROM temp WHERE gametype='" + modname + "' AND serverid = '" + str(
+                    server) + "' AND channelid = '" + str(chanid) + "' AND captain = 1")
+            red_captain = c.fetchall()
+            red_captain = [i[0] for i in red_captain]
+            red_captain = red_captain[0]
+            print(red_captain[0])
+
+            c.execute(
+                "SELECT players FROM temp WHERE gametype='" + modname + "' AND serverid = '" + str(
+                    server) + "' AND channelid = '" + str(chanid) + "' AND captain = 2")
+            blue_captain = c.fetchall()
+            blue_captain = [i[0] for i in blue_captain]
+            blue_captain = blue_captain[0]
+            print(blue_captain[0])
+
+            await message.edit(
+                content=f'{listpicks(modname)[0]} \n **Red Team: ** <@{str(red_captain)}> \n **Blue Team: ** <@{blue_captain}> \n <@' + red_captain + '> TO PICK ')
+
+            remaining_indexes = listpicks(modname)[1]
+
+
+            reactionpool = ['0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
+
+            for i in range(0, len(remaining_indexes)):
+                await message.add_reaction(reactionpool[remaining_indexes[i]])
+
+            await asyncio.sleep(1)
+            # task kills itself
+            task, = [task for task in asyncio.all_tasks() if
+                     task.get_name() == ('countdown' + str(server) + str(chanid) + str(modname))]
+            task.cancel()
+
         await message.edit(content=f'{modname} has been filled \n Choosing Random Captains in ' + str(time))
         await asyncio.sleep(1)
         time = time - 1
+
+    # Gets player limit to define random captain logic
 
     c.execute(
         "SELECT playerlimit FROM modsettings WHERE mod='" + modname + "' AND serverid = '" + str(
             server) + "' AND channelid = '" + str(chanid) + "'")
     playerlimit = c.fetchall()
 
-    captains = randcapt(modname, playerlimit[0], server, chanid)
+    # Chooses 1 or 2 random captains
 
-    red_captain = captains[0]
-    blue_captain = captains[1]
+    if captain_count[0] == 0:
+        captains = randcapt(modname, playerlimit[0], server, chanid)
+        red_captain = captains[0]
+        blue_captain = captains[1]
+    elif captain_count[0] == 1:
+
+        print(playerlimit[0])
+        captains = randcapt(modname, playerlimit[0], server, chanid, 1)
+
+        # Finds player id for whoever manually captained
+        c.execute(
+            "SELECT players FROM temp WHERE gametype='" + modname + "' AND serverid = '" + str(
+                server) + "' AND channelid = '" + str(chanid) + "' AND captain = 1")
+        red_captain = c.fetchall()
+        red_captain = [i[0] for i in red_captain]
+        red_captain = red_captain[0]
+        blue_captain = captains[0]
+    elif captain_count[0] == 2:
+        c.execute(
+            "SELECT players FROM temp WHERE gametype='" + modname + "' AND serverid = '" + str(
+                server) + "' AND channelid = '" + str(chanid) + "' AND captain = 1")
+        red_captain = c.fetchall()
+        red_captain = [i[0] for i in red_captain]
+        red_captain = red_captain[0]
+
+        c.execute(
+            "SELECT players FROM temp WHERE gametype='" + modname + "' AND serverid = '" + str(
+                server) + "' AND channelid = '" + str(chanid) + "' AND captain = 2")
+        blue_captain = c.fetchall()
+        blue_captain = [i[0] for i in blue_captain]
+        blue_captain = blue_captain[0]
 
     xparsed1 = str(red_captain).replace('(', '')
     xparsed1 = xparsed1.replace(')', '')
@@ -279,9 +402,7 @@ async def countdown(time, chan, chanid, server, modname):
     xparsed2 = xparsed2.replace("'", '')
     xparsed2 = xparsed2.replace(',', '')
 
-    await message.edit(
-        content=f'**Random captains selected** \n Red Team: <@{xparsed1}> \n Blue Team: <@{xparsed2}>'
-                f' \n <@{xparsed1}> to pick')
+
 
     ####### Assign captains 1 or 2
     c.execute("UPDATE temp SET captain = 1 WHERE players = '" + xparsed1 + "'")
@@ -294,6 +415,9 @@ async def countdown(time, chan, chanid, server, modname):
     conn.commit()
     c.execute("UPDATE temp SET team = 'blue' WHERE players = '" + xparsed2 + "'")
     conn.commit()
+
+    await message.edit(
+        content=f'{listpicks(modname)[0]} \n **Red Team: ** <@{str(xparsed1)}> \n **Blue Team: ** <@{xparsed2}> \n <@' + xparsed1 + '> TO PICK ')
 
     remaining_indexes = listpicks(modname)[1]
 
@@ -405,8 +529,8 @@ async def join(inter, gametype: str):
     modname = gametype
 
     c.execute(
-        "SELECT players FROM playerlist WHERE server = '" + inter.guild.name +
-        "' AND channel = '" + inter.channel.name +
+        "SELECT players FROM playerlist WHERE serverid = '" + str(inter.guild.id) +
+        "' AND channelid = '" + str(inter.channel.id) +
         "' AND mod = '" + gametype +
         "' AND players = '" + name + "'")
 
@@ -435,21 +559,19 @@ async def join(inter, gametype: str):
         ####### Checks if full
 
         c.execute(
-            "SELECT COUNT(*) FROM playerlist WHERE players is not null AND mod = '" + gametype + "' AND serverid = '" + str(inter.guild.id) + "' AND channelid = '" + str(inter.channel.id) + "'")
+            "SELECT COUNT(*) FROM playerlist WHERE players is not null AND mod = '" + gametype + "' AND serverid = '" + str(
+                inter.guild.id) + "' AND channelid = '" + str(inter.channel.id) + "'")
         playernum = c.fetchall()
 
         c.execute(
-            "SELECT playerlimit FROM modsettings WHERE mod='" + gametype + "' AND serverid = '" + str(inter.guild.id) + "' AND channelid = '" + str(inter.channel.id) + "'")
+            "SELECT playerlimit FROM modsettings WHERE mod='" + gametype + "' AND serverid = '" + str(
+                inter.guild.id) + "' AND channelid = '" + str(inter.channel.id) + "'")
         playerlimit = c.fetchall()
 
         ####### Begin picks
         if playernum == playerlimit:
 
-            ##### creates countdown task where random captains are chosen if finishes
-            chan = bot.get_channel(int(inter.channel.id))
-            asyncio.create_task(
-                countdown(60, chan, inter.channel.id, inter.guild.id, gametype),
-                name=str('countdown' + str(inter.guild.id)) + str(inter.channel.id) + gametype)
+            await inter.send(f'{displayname} has filled {modname}')
 
             ####### Copy player list to temp table
             c.execute(
@@ -470,11 +592,18 @@ async def join(inter, gametype: str):
             c.execute("UPDATE temp SET pickorder = IFNULL(pickorder, '0')")
             conn.commit()
 
-            ### Wait for countdown
-            await asyncio.sleep(5)
+            ##### creates countdown task where random captains are chosen if finishes
+            chan = bot.get_channel(int(inter.channel.id))
+            asyncio.create_task(
+                countdown(10, chan, inter.channel.id, inter.guild.id, gametype),
+                name=str('countdown' + str(inter.guild.id)) + str(inter.channel.id) + gametype)
 
-            ### List available picks
-            await inter.channel.send(f'{listpicks(gametype)[0]} ')
+            #!#!#!#! MOVE ALL OF THIS TO COUNTDOWN
+            # ### Wait for countdown
+            # await asyncio.sleep(12)
+            #
+            # ### List available picks
+            # await inter.channel.send(f'{listpicks(gametype)[0]} ')
 
         else:
 
@@ -503,7 +632,7 @@ async def leave(inter, gametype: str):
     modname = gametype
 
     c.execute("SELECT players FROM playerlist WHERE players = '" + str(
-        name) + "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "'")
+        name) + "' AND serverid = '" + str(inter.guild.id) + "' AND channelid = '" + str(inter.channel.id) + "'")
 
     isplayer = c.fetchall()
     isplayerparsed = str(isplayer)
@@ -519,9 +648,26 @@ async def leave(inter, gametype: str):
     playerlimit = c.fetchall()
 
     if playernum == playerlimit:
+
+        # If was full (and countdown is still going (there aren't 2 captains)) also ends countdown
+
+        c.execute("SELECT COUNT(DISTINCT captain) FROM temp WHERE gametype = '" + str(modname) + "'")
+        captain_count = c.fetchall()
+        captain_count = [i[0] for i in captain_count]
+        print(str(modname))
+        print("CAPTAIN COUNT:")
+        print(captain_count[0])
+
+        if int(captain_count[0]) < 2:
+            task, = [task for task in asyncio.all_tasks() if
+                     task.get_name() == ('countdown' + str(inter.guild.id) + str(inter.channel.id) + str(modname))]
+            task.cancel()
+
+        # Removes all players from temp in that gametype
         c.execute(
             "DELETE FROM temp WHERE gametype='" + modname + "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "'")
         conn.commit()
+
         await inter.channel.send(f'Picking aborted')
     #####
 
@@ -688,8 +834,7 @@ async def pickplayer(pickedplayer, name, server, serverid, channel, channelid):
 
     if str(name) != str(allowedcaptain[0]):
         print("NOT ALLOWED CAPTAIN")
-        return()
-
+        return ()
 
     # CHECK FOR IF ALREADY PICKED
     c.execute("SELECT pickorder FROM temp WHERE ROWID = " + pickedplayer + "")
@@ -760,7 +905,8 @@ async def pickplayer(pickedplayer, name, server, serverid, channel, channelid):
 
             c.execute("UPDATE temp SET team = '" + lessteam + "' WHERE team = '0'")
             conn.commit()
-            c.execute("UPDATE temp SET pickorder = '" + str(highpick + 1) + "' WHERE pickorder is '0' AND captain IS NULL")
+            c.execute(
+                "UPDATE temp SET pickorder = '" + str(highpick + 1) + "' WHERE pickorder is '0' AND captain IS NULL")
             conn.commit()
 
             redpicks = listteampicks(parsedmodname, 'red')
@@ -942,13 +1088,14 @@ async def reset(inter, gametype: str):
     await asyncio.sleep(5)
     await inter.channel.send(f'{listpicks(gametype)[0]} ')
 
+
 @bot.slash_command(description="Captain for a pug")
 async def captain(inter):
-
     name = inter.author.id
 
     # Find gametype that is actively counting down
-    c.execute("SELECT gametype FROM temp WHERE players = "+str(name)+" AND channelid = "+str(inter.channel.id)+"")
+    c.execute(
+        "SELECT gametype FROM temp WHERE players = " + str(name) + " AND channelid = " + str(inter.channel.id) + "")
     gametype = c.fetchall()
     gametype = [i[0] for i in gametype]
     print(gametype[0])
@@ -959,11 +1106,10 @@ async def captain(inter):
     captain_count = [i[0] for i in captain_count]
     print(captain_count[0])
 
-
     if int(captain_count[0]) < 1:
-        c.execute("UPDATE temp SET captain = '1' WHERE players = "+str(name)+"")
+        c.execute("UPDATE temp SET captain = '1' WHERE players = " + str(name) + "")
         conn.commit()
-        await inter.channel.send(f""+str(inter.author.name)+" has captained for the red team")
+        await inter.channel.send(f"" + str(inter.author.name) + " has captained for the red team")
         c.execute("UPDATE temp SET team = 'red' WHERE players = " + str(name) + "")
         conn.commit()
         return ()
@@ -993,7 +1139,4 @@ async def captain(inter):
     return ()
 
 
-
-
 bot.run(str(discordtoken))
-
