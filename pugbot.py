@@ -1,9 +1,4 @@
-import discord  # Import the original discord.py module
-# from discord.ext import commands  # Import the discord.py extension "commands"
-# import discord_slash  # Import the third-party extension discord_slash module
 from disnake.ext import commands
-from discord.ui import button, Button, View
-from discord.interactions import Interaction
 import sqlite3
 import asyncio
 import random
@@ -48,7 +43,8 @@ def listplayers(gametype, server, channel):
     modnameparsed = modnameparsed.replace(',', '')
 
     c.execute(
-        "SELECT playername FROM playerlist WHERE mod = '" + gametype + "' AND server = '" + server + "' AND channel = '" + channel + "'")
+        "SELECT playername FROM playerlist "
+        "WHERE mod = '" + gametype + "' AND server = '" + server + "' AND channel = '" + channel + "'")
 
     response = c.fetchall()
 
@@ -59,8 +55,10 @@ def listplayers(gametype, server, channel):
 
     while i < len(b):
         c.execute(
-            "SELECT (julianday('now') - julianday(time)) * 24 * 60 * 60 FROM playerlist WHERE mod = '" + gametype + "' AND server = '" + server + "' AND channel = '" + channel + "' AND playername = '" +
-            b[i] + "'")
+            "SELECT (julianday('now') - julianday(time)) * 24 * 60 * 60 "
+            "FROM playerlist WHERE mod = '" + gametype + "' AND server = '" + server + "' AND channel = '" + channel +
+            "' AND playername = '" + b[i] + "'")
+
         timetest = c.fetchall()
         t = [i[0] for i in timetest]
         timediff = str(time_elapsed(t[0]))
@@ -76,7 +74,8 @@ def listplayers(gametype, server, channel):
 
     # gets number of players in mod
     c.execute(
-        "SELECT COUNT(*) FROM playerlist WHERE mod = '" + gametype + "' AND server = '" + server + "' AND channel = '" + channel + "'")
+        "SELECT COUNT(*) FROM playerlist "
+        "WHERE mod = '" + gametype + "' AND server = '" + server + "' AND channel = '" + channel + "'")
 
     playernum = c.fetchall()
 
@@ -89,7 +88,8 @@ def listplayers(gametype, server, channel):
     # (parsedplayernum)
 
     c.execute(
-        "SELECT playerlimit FROM modsettings WHERE mod='" + gametype + "' AND server = '" + server + "' AND channel = '" + channel + "'")
+        "SELECT playerlimit FROM modsettings "
+        "WHERE mod='" + gametype + "' AND server = '" + server + "' AND channel = '" + channel + "'")
     playerlimit = c.fetchall()
 
     parsedplayerlimit = str(playerlimit)
@@ -505,11 +505,13 @@ async def addmod(inter, gametype: str, playernum: str, pickorder: str):
 @bot.slash_command(description="Remove a gametype")
 async def delmod(inter, gametype: str):
     c.execute(
-        "DELETE FROM modsettings WHERE mod = '" + gametype + "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "' ;")
+        "DELETE FROM modsettings WHERE mod = '" + gametype +
+        "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "' ;")
     conn.commit()
 
     c.execute(
-        "DELETE FROM playerlist WHERE mod = '" + gametype + "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "' ;")
+        "DELETE FROM playerlist WHERE mod = '" + gametype +
+        "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "' ;")
     conn.commit()
 
     await inter.send(f'{gametype} has been removed')
@@ -559,8 +561,8 @@ async def join(inter, gametype: str):
         ####### Checks if full
 
         c.execute(
-            "SELECT COUNT(*) FROM playerlist WHERE players is not null AND mod = '" + gametype + "' AND serverid = '" + str(
-                inter.guild.id) + "' AND channelid = '" + str(inter.channel.id) + "'")
+            "SELECT COUNT(*) FROM playerlist WHERE players is not null AND mod = '" + gametype +
+            "' AND serverid = '" + str(inter.guild.id) + "' AND channelid = '" + str(inter.channel.id) + "'")
         playernum = c.fetchall()
 
         c.execute(
@@ -575,7 +577,8 @@ async def join(inter, gametype: str):
 
             ####### Copy player list to temp table
             c.execute(
-                "INSERT INTO temp(server, serverid, channel, channelid, players, playername) SELECT server, serverid, channel, channelid, players, playername "
+                "INSERT INTO temp(server, serverid, channel, channelid, players, playername) "
+                "SELECT server, serverid, channel, channelid, players, playername "
                 "FROM playerlist WHERE mod = '" + gametype + "' AND server = '"
                 + inter.guild.name + "' AND channel = '" + inter.channel.name + "'")
             conn.commit()
@@ -640,11 +643,13 @@ async def leave(inter, gametype: str):
     ###CHECKS IF PUG WAS FULL. DELETE TEMP IF SO
 
     c.execute(
-        "SELECT COUNT(*) FROM playerlist WHERE mod ='" + gametype + "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "'")
+        "SELECT COUNT(*) FROM playerlist WHERE mod ='" + gametype +
+        "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "'")
     playernum = c.fetchall()
 
     c.execute(
-        "SELECT playerlimit FROM modsettings WHERE mod='" + modname + "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "'")
+        "SELECT playerlimit FROM modsettings WHERE mod='" + modname +
+        "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "'")
     playerlimit = c.fetchall()
 
     if playernum == playerlimit:
@@ -665,7 +670,8 @@ async def leave(inter, gametype: str):
 
         # Removes all players from temp in that gametype
         c.execute(
-            "DELETE FROM temp WHERE gametype='" + modname + "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "'")
+            "DELETE FROM temp WHERE gametype='" + modname +
+            "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "'")
         conn.commit()
 
         await inter.channel.send(f'Picking aborted')
@@ -709,7 +715,8 @@ async def list(inter, gametype: str = None):
     else:
 
         c.execute(
-            "SELECT DISTINCT mod FROM modsettings WHERE server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "'")
+            "SELECT DISTINCT mod FROM modsettings "
+            "WHERE server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "'")
 
         modlist = c.fetchall()
 
@@ -722,7 +729,8 @@ async def list(inter, gametype: str = None):
             xparsed = xparsed.replace(',', '')
 
             c.execute(
-                "SELECT playerlimit FROM modsettings WHERE mod='" + xparsed + "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "'")
+                "SELECT playerlimit FROM modsettings WHERE mod='" + xparsed +
+                "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "'")
             playerlimit = c.fetchall()
 
             parsedplayerlimit = str(playerlimit)
@@ -734,7 +742,8 @@ async def list(inter, gametype: str = None):
             parsedplayerlimit = parsedplayerlimit.replace(',', "")
 
             c.execute(
-                "SELECT COUNT(*) FROM playerlist WHERE mod = '" + xparsed + "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "'")
+                "SELECT COUNT(*) FROM playerlist WHERE mod = '" + xparsed +
+                "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "'")
 
             playernum = c.fetchall()
 
@@ -961,24 +970,24 @@ async def pickplayer(pickedplayer, name, server, serverid, channel, channelid):
         bluepicks = listteampicks(parsedmodname, 'blue')
 
         if (highpick - 1) in redorder:
-            c.execute("SELECT playername FROM temp WHERE captain = 2 AND team = 'blue'")
+            c.execute("SELECT players FROM temp WHERE captain = 2 AND team = 'blue'")
 
             currentcaptain = c.fetchone()
             print(currentcaptain)
 
         elif (highpick - 1) in blueorder:
-            c.execute("SELECT playername FROM temp WHERE captain = 1 AND team = 'red'")
+            c.execute("SELECT players FROM temp WHERE captain = 1 AND team = 'red'")
 
             currentcaptain = c.fetchone()
             print(currentcaptain)
         else:
-            c.execute("SELECT playername FROM temp WHERE captain = 2 AND team = 'blue'")
+            c.execute("SELECT players FROM temp WHERE captain = 2 AND team = 'blue'")
 
             currentcaptain = c.fetchone()
 
         message = await channel.send(
-            f'{remaining} \n **Red Team: ** {redpicks} \n **Blue Team: ** {bluepicks} \n @' + currentcaptain[
-                0] + ' TO PICK ')
+            f'{remaining} \n **Red Team: ** {redpicks} \n **Blue Team: ** {bluepicks} \n <@' + currentcaptain[
+                0] + '> TO PICK ')
 
         remaining_indexes = listpicks(parsedmodname)[1]
 
@@ -1109,7 +1118,7 @@ async def captain(inter):
     if int(captain_count[0]) < 1:
         c.execute("UPDATE temp SET captain = '1' WHERE players = " + str(name) + "")
         conn.commit()
-        await inter.channel.send(f"" + str(inter.author.name) + " has captained for the red team")
+        await inter.send(f"" + str(inter.author.name) + " has captained for the red team")
         c.execute("UPDATE temp SET team = 'red' WHERE players = " + str(name) + "")
         conn.commit()
         return ()
@@ -1131,7 +1140,7 @@ async def captain(inter):
             conn.commit()
             c.execute("UPDATE temp SET team = 'blue' WHERE players = " + str(name) + "")
             conn.commit()
-            await inter.channel.send(f"" + str(inter.author.name) + " has captained for the blue team")
+            await inter.send(f"" + str(inter.author.name) + " has captained for the blue team")
             return ()
     elif int(captain_count[0]) == 2:
         await inter.channel.send(f'There are already 2 captains')
