@@ -1,7 +1,9 @@
+import disnake
 from disnake.ext import commands
 import sqlite3
 import asyncio
 import random
+from typing import List
 
 bot = commands.Bot(
     command_prefix='!',
@@ -145,6 +147,7 @@ def listpicks(gametype):
 
 
 ######## Lists players on team
+#!#!#!#! NEED TO REALLY SPECIFY CHANNEL AND SERVER
 def listteampicks(gametype, team):
     modnameparsed = 'temp'
 
@@ -156,7 +159,7 @@ def listteampicks(gametype, team):
     ### MAKE THIS A FUNCTION EVENTUALLY
     ###
 
-    # !#!#!#! Every other comes out bold. fix it | UPDATE: FIXED. SHITTILY
+    # !#!#!#! Every other comes out bold. fix it | UPDATE: FIXED. POORLY
 
     parsedresponse = str(response).replace('(', '**')
     parsedresponse = parsedresponse.replace(')', '')
@@ -170,6 +173,23 @@ def listteampicks(gametype, team):
 
     return (parsedresponse)
 
+def list_historical_picks(gametype, team, back: str='0'):
+
+    c.execute("SELECT playername FROM history WHERE team = '" + str(team) + "' AND gametype = '" + str(gametype) + "' AND gameindex = (SELECT MAX(gameindex) -" + str(back) + " from history) ORDER BY pickorder")
+
+    response = c.fetchall()
+
+    parsedresponse = str(response).replace('(', '**')
+    parsedresponse = parsedresponse.replace(')', '')
+    parsedresponse = parsedresponse.replace(", '", ')** ')
+    parsedresponse = parsedresponse.replace("'", '')
+    parsedresponse = parsedresponse.replace(', ', ':small_orange_diamond:')
+    parsedresponse = parsedresponse.replace(',', '')
+    parsedresponse = parsedresponse.replace(']', '')
+    parsedresponse = parsedresponse.replace('[', '')
+    parsedresponse = parsedresponse.replace("**", '')
+
+    return (parsedresponse)
 
 ########
 
@@ -925,8 +945,9 @@ async def pickplayer(pickedplayer, name, server, serverid, channel, channelid):
             # Send to history
 
             c.execute(
-                "INSERT INTO history (server, channel, gametype, team, players, playername, pickorder) "
-                "SELECT server, channel, gametype, team, players, playername, pickorder FROM temp "
+                "INSERT INTO history "
+                "(server, serverid, channel, channelid, gametype, team, players, playername, pickorder) "
+                "SELECT server, serverid, channel, channelid, gametype, team, players, playername, pickorder FROM temp "
                 "WHERE gametype = '" + parsedmodname + "'"
             )
             conn.commit()
@@ -1147,5 +1168,152 @@ async def captain(inter):
 
     return ()
 
+class Counter(disnake.ui.View):
+
+    # Define the actual button
+    # When pressed, this increments the number displayed until it hits 5.
+    # When it hits 5, the counter button is disabled and it turns green.
+    # note: The name of the function does not matter to the library
+
+    #returns to beginning
+    @disnake.ui.button(label="⏮ (0)", style=disnake.ButtonStyle.green)
+    async def back(self, button: disnake.ui.Button, interaction: disnake.MessageInteraction):
+        number = button.label
+        number = number.replace("(", "")
+        number = number.replace(")", "")
+        number = number.replace(" ", "")
+        number = number.replace("⏮", "")
+        print(number)
+
+        c.execute(
+            "SELECT (julianday('now') - julianday(time)) * 24 * 60 * 60  FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) ORDER BY team DESC, pickorder ASC")
+        time = c.fetchall()
+        time = [i[0] for i in time]
+        timediff = str(time_elapsed(time[0]))
+
+        c.execute(
+            "SELECT time FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) - " + str(
+                number) + " from HISTORY) ORDER BY team DESC, pickorder ASC")
+        date = c.fetchall()
+        date = [i[0] for i in date]
+
+        timediff = timediff.replace('[', '')
+        timediff = timediff.replace(']', '')
+        timediff = timediff.replace("'", '')
+
+        c.execute(
+            "SELECT gametype FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) - " + str(
+                number) + " from HISTORY) ORDER BY team DESC, pickorder ASC")
+        gametype = c.fetchall()
+        gametype = [i[0] for i in gametype]
+
+        # await inter.send(f' **Last {str(gametype[0])}:** {str(timediff)} ago')
+
+        redpicks = list_historical_picks(gametype[0], 'red', number)
+        bluepicks = list_historical_picks(gametype[0], 'blue', number)
+
+        embed = disnake.Embed(
+            title="Last " + str(gametype[0]) + ": " + str(timediff) + " ago",
+            description="Date: " + date[0],
+            colour=0xF0C43F,
+        )
+
+        embed.add_field(name="Red Team", value=str(redpicks), inline=False)
+        embed.add_field(name="Blue Team", value=str(bluepicks), inline=False)
+
+        # Make sure to update the message with our updated selves
+
+        await interaction.response.edit_message(embed=embed, view=Counter())
+
+    @disnake.ui.button(label="(1) ▶", style=disnake.ButtonStyle.green)
+    async def count(self, button: disnake.ui.Button, interaction: disnake.MessageInteraction):
+
+        number = button.label
+        number = number.replace("(", "")
+        number = number.replace(")", "")
+        number = number.replace(" ", "")
+        number = number.replace("▶", "")
+        print(number)
+
+        button.label = "(" + str(int(number) + 1) + ") ▶"
+
+        c.execute(
+            "SELECT (julianday('now') - julianday(time)) * 24 * 60 * 60  FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) ORDER BY team DESC, pickorder ASC")
+        time = c.fetchall()
+        time = [i[0] for i in time]
+        timediff = str(time_elapsed(time[0]))
+
+        c.execute(
+            "SELECT time FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) - " + str(number) + " from HISTORY) ORDER BY team DESC, pickorder ASC")
+        date = c.fetchall()
+        date = [i[0] for i in date]
+
+        timediff = timediff.replace('[', '')
+        timediff = timediff.replace(']', '')
+        timediff = timediff.replace("'", '')
+
+        c.execute(
+            "SELECT gametype FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) - " + str(number) + " from HISTORY) ORDER BY team DESC, pickorder ASC")
+        gametype = c.fetchall()
+        gametype = [i[0] for i in gametype]
+
+        # await inter.send(f' **Last {str(gametype[0])}:** {str(timediff)} ago')
+
+        redpicks = list_historical_picks(gametype[0], 'red', number)
+        bluepicks = list_historical_picks(gametype[0], 'blue', number)
+
+        embed = disnake.Embed(
+            title="Last " + str(gametype[0]) + ": " + str(timediff) + " ago",
+            description="Date: " + date[0],
+            colour=0xF0C43F,
+        )
+
+        embed.add_field(name="Red Team", value=str(redpicks), inline=False)
+        embed.add_field(name="Blue Team", value=str(bluepicks), inline=False)
+
+        # update the message
+
+        await interaction.response.edit_message(embed=embed, view=self)
+
+@bot.slash_command(description="Show last pick up game")
+async def last(inter, gametype: str=None):
+    c.execute("SELECT (julianday('now') - julianday(time)) * 24 * 60 * 60  FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) ORDER BY team DESC, pickorder ASC")
+    time = c.fetchall()
+    time = [i[0] for i in time]
+    timediff = str(time_elapsed(time[0]))
+
+    c.execute("SELECT time FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) ORDER BY team DESC, pickorder ASC")
+    date = c.fetchall()
+    date = [i[0] for i in date]
+
+    timediff = timediff.replace('[', '')
+    timediff = timediff.replace(']', '')
+    timediff = timediff.replace("'", '')
+
+    c.execute("SELECT gametype FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) ORDER BY team DESC, pickorder ASC")
+    gametype = c.fetchall()
+    gametype = [i[0] for i in gametype]
+
+    #await inter.send(f' **Last {str(gametype[0])}:** {str(timediff)} ago')
+
+    redpicks = list_historical_picks(gametype[0], 'red')
+    bluepicks = list_historical_picks(gametype[0], 'blue')
+
+    embed = disnake.Embed(
+        title="Last " + str(gametype[0]) + ": " + str(timediff) + " ago",
+        description="Date: " + date[0],
+        colour=0xF0C43F,
+    )
+
+    embed.add_field(name="Red Team", value=str(redpicks), inline=False)
+    embed.add_field(name="Blue Team", value=str(bluepicks), inline=False)
+
+    exampleButton1 = disnake.ui.Button(style=disnake.ButtonStyle.primary, label="⬅")
+    exampleButton2 = disnake.ui.Button(style=disnake.ButtonStyle.primary, label="➡")
+    buttons_view = disnake.ui.View()
+    buttons_view.add_item(exampleButton1)
+    buttons_view.add_item(exampleButton2)
+
+    await inter.send(embed=embed, view=Counter())
 
 bot.run(str(discordtoken))
