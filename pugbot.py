@@ -434,14 +434,10 @@ async def getpickorders(playerlimit, pickorder):
 # "joining" as a function. also used for force adding players
 async def join_func(player, displayname, gametype, server, serverid, channel, channelid):
     author = player
-    print(author)
-    print("DISPLAY NAME")
-    print(displayname)
     name = str(author)
     playername = str(displayname)
     modname = gametype
     channelid = await bot.fetch_channel(channelid)
-    print(channelid)
 
     c.execute(
         "SELECT players FROM playerlist WHERE serverid = '" + str(serverid) +
@@ -472,7 +468,6 @@ async def join_func(player, displayname, gametype, server, serverid, channel, ch
         conn.commit()
 
         ####### Checks if full
-
         c.execute(
             "SELECT COUNT(*) FROM playerlist WHERE players is not null AND mod = '" + gametype +
             "' AND serverid = '" + str(serverid) + "' AND channelid = '" + str(channelid.id) + "'")
@@ -529,6 +524,84 @@ async def join_func(player, displayname, gametype, server, serverid, channel, ch
 
             print(runninglist)
     return ()
+
+
+# LEAVE Function
+###################################################################################################################
+
+async def leave_func(player, displayname, gametype, server, serverid, channel, channelid):
+    author = player
+    print(author)
+    name = str(author)
+    print(name)
+    playername = str(displayname)
+    modname = gametype
+    print(modname)
+    channelid = await bot.fetch_channel(channelid)
+    print(channelid)
+
+    c.execute("SELECT players FROM playerlist WHERE players = '" + str(
+        name) + "' AND serverid = '" + str(serverid) + "' AND channelid = '" + str(channelid.id) + "'")
+
+    isplayer = c.fetchall()
+    isplayerparsed = str(isplayer)
+
+    ###CHECKS IF PUG WAS FULL. DELETE TEMP IF SO
+
+    c.execute(
+        "SELECT COUNT(*) FROM playerlist WHERE mod ='" + gametype +
+        "' AND server = '" + server + "' AND channel = '" + channel + "'")
+    playernum = c.fetchall()
+
+    c.execute(
+        "SELECT playerlimit FROM modsettings WHERE mod='" + modname +
+        "' AND server = '" + server + "' AND channel = '" + channel + "'")
+    playerlimit = c.fetchall()
+
+    if playernum == playerlimit:
+
+        # If was full (and countdown is still going (there aren't 2 captains)) also ends countdown
+
+        c.execute("SELECT COUNT(DISTINCT captain) FROM temp WHERE gametype = '" + str(modname) + "'")
+        captain_count = c.fetchall()
+        captain_count = [i[0] for i in captain_count]
+        print(str(modname))
+        print("CAPTAIN COUNT:")
+        print(captain_count[0])
+
+        if int(captain_count[0]) < 2:
+            task, = [task for task in asyncio.all_tasks() if
+                     task.get_name() == ('countdown' + str(serverid) + str(channelid.id) + str(modname))]
+            task.cancel()
+
+        # Removes all players from temp in that gametype
+        c.execute(
+            "DELETE FROM temp WHERE gametype='" + modname +
+            "' AND server = '" + server + "' AND channel = '" + channel + "'")
+        conn.commit()
+
+        await channelid.send(f'Picking aborted')
+    #####
+
+    if isplayerparsed == '[]':
+        isplayerin = 0
+    else:
+        isplayerin = 1
+
+    if isplayerin != 1:
+        await channelid.send(f'{displayname} is not in the {modname} pug')
+    else:
+        c.execute(
+            "DELETE FROM playerlist WHERE server = '" + server + "' AND channel = '" + channel +
+            "' AND mod = '" + gametype + "' AND players = ('" + str(name) + "');")
+        conn.commit()
+
+        await channelid.send(f'{displayname} has left the {modname} pug')
+
+    ### remove timeout task
+    task, = [task for task in asyncio.all_tasks() if
+             task.get_name() == (str(serverid) + str(channelid.id) + gametype + str(player))]
+    task.cancel()
 
 
 # Picking as function
@@ -1289,12 +1362,13 @@ async def last(inter, gametype: str = None):
 
     await inter.send(embed=embed, view=last_buttons())
 
+
 ###################################################################################################################
 # Force add a player to a pug
 # !#!#! Need to check for admin
 ###################################################################################################################
 
-@bot.slash_command(description="Add a player to a pug")
+@bot.slash_command(description="Add a player to a pug (use mention)")
 async def addplayer(inter, player, gametype):
     print(player)
     print(type(player))
@@ -1308,6 +1382,87 @@ async def addplayer(inter, player, gametype):
     await join_func(author, displayname.name, gametype, inter.guild.name, inter.guild.id, inter.channel.name,
                     inter.channel.id)
     await inter.send(f'{displayname.name} has been added to {gametype} by {inter.author.name}')
+    return ()
+
+
+###################################################################################################################
+# Force remove a player from a pug
+# !#!#! Need to check for admin #!#! maybe change 'author' to 'target'
+###################################################################################################################
+
+@bot.slash_command(description="Add a player to a pug (use mention)")
+async def delplayer(inter, player, gametype):
+    print(player)
+    print(type(player))
+    author = player.replace('<', '')
+    author = author.replace('>', '')
+    author = author.replace('@', '')
+    author = author.replace('!', '')
+
+    displayname = await bot.fetch_user(author)
+
+    await leave_func(author, displayname.name, gametype, inter.guild.name, inter.guild.id, inter.channel.name,
+                     inter.channel.id)
+    await inter.send(f'{displayname.name} has been removed from {gametype} by {inter.author.name}')
+    return ()
+
+
+###################################################################################################################
+# Adds available map
+###################################################################################################################
+
+@bot.slash_command(description="Lists maps from pool")
+async def maps(inter, gametype):
+    c.execute("SELECT map FROM maps WHERE gametype = '" + str(gametype) +
+              "' AND channelid = '" + str(inter.channel.id) +
+              "' AND serverid = '" + str(inter.guild.id) +
+              "' ORDER BY map ASC")
+
+    response = c.fetchall()
+
+    parsedresponse = str(response).replace('(', '**')
+    parsedresponse = parsedresponse.replace(')', '')
+    parsedresponse = parsedresponse.replace(", '", ')** ')
+    parsedresponse = parsedresponse.replace("'", '')
+    parsedresponse = parsedresponse.replace(', ', ':small_orange_diamond:')
+    parsedresponse = parsedresponse.replace(',', '')
+    parsedresponse = parsedresponse.replace(']', '')
+    parsedresponse = parsedresponse.replace('[', '')
+    parsedresponse = parsedresponse.replace("**", '')
+
+    await inter.send(parsedresponse)
+
+
+###################################################################################################################
+# Adds available map to pool
+###################################################################################################################
+
+@bot.slash_command(description="Adds map to pool")
+async def addmap(inter, gametype, map):
+    c.execute("INSERT INTO maps (serverid, channelid, gametype, map) "
+              "VALUES('" + str(inter.guild.id) +
+              "', '" + str(inter.channel.id) +
+              "', '" + str(gametype) +
+              "', '" + str(map) + "')")
+    conn.commit()
+
+    await inter.send(str(map) + ' added to ' + str(gametype))
+
+
+###################################################################################################################
+# Lists available maps
+###################################################################################################################
+
+@bot.slash_command(description="Removes a map from the pool")
+async def delmap(inter, gametype, map):
+    c.execute(
+        "DELETE FROM maps WHERE gametype='" + gametype +
+        "' AND serverid = '" + str(inter.guild.id) +
+        "' AND map = '" + str(map) +
+        "' AND channelid = '" + str(inter.channel.id) + "'")
+    conn.commit()
+
+    await inter.send(str(map) + ' removed from ' + str(gametype))
     return ()
 
 
@@ -1417,6 +1572,7 @@ class JoinLeaveButtons(disnake.ui.View):
         task.cancel()
 
         return ()
+
 
 # Define reaction result for picking
 @bot.event
