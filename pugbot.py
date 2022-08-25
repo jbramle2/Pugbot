@@ -8,7 +8,8 @@ bot = commands.Bot(
     command_prefix='!',
     test_guilds=[482012169911664640, 192460940409700352],
     sync_commands_debug=True
-)
+    )
+
 conn = sqlite3.connect("pugbotdb.db")
 c = conn.cursor()
 
@@ -17,8 +18,8 @@ with open('token.txt', 'r') as t:
 
 print(discordtoken)
 
+# creates a running list of asyncio tasks
 runninglist = []
-
 
 # Tell me bot is running
 @bot.event
@@ -82,8 +83,6 @@ def listplayers(gametype, server, channel):
     parsedplayernum = parsedplayernum.replace(')', '')
     parsedplayernum = parsedplayernum.replace('(', '')
     parsedplayernum = parsedplayernum.replace(',', '')
-
-    # (parsedplayernum)
 
     c.execute(
         "SELECT playerlimit FROM modsettings "
@@ -686,7 +685,7 @@ async def pickplayer(pickedplayer, name, server, serverid, channel, channelid):
         return ()
 
     # CHECK FOR IF ALREADY PICKED
-    c.execute("SELECT pickorder FROM temp WHERE ROWID = " + pickedplayer + "")
+    c.execute("SELECT pickorder FROM temp WHERE ROWID = " + pickedplayer + " AND captain IS NULL")
     hasteam = c.fetchone()
     hasteamint = hasteam[0]
 
@@ -826,6 +825,13 @@ async def pickplayer(pickedplayer, name, server, serverid, channel, channelid):
 
             currentcaptain = c.fetchone()
 
+        # Erase previous message to help with spam
+        # #!#!#! Need to check contents to make sure it's deleting actual pick messages
+        msg = await channel.history().get(author__id=918988342786404423)
+        await msg.delete(delay=1)
+        print(f"Deleted message: {msg.id}")
+
+        # Send current updated list
         message = await channel.send(
             f'{remaining} \n **Red Team: ** {redpicks} \n **Blue Team: ** {bluepicks} \n <@' + currentcaptain[
                 0] + '> TO PICK ')
