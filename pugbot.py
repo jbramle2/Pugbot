@@ -238,11 +238,39 @@ def time_elapsed(seconds):
     else:
         b = str(int((seconds % 3600) // 60))
         d = ["{}m".format(b)]
-
+    print(d)
     return d
 
 
-#### Begins timer to remove idle player
+def secs_to_days(n):
+    days = int(n // (24 * 3600))
+
+    n = n % (24 * 3600)
+    hours = int(n // 3600)
+
+    n %= 3600
+    minutes = int(n // 60)
+
+    if days > 0:
+        if days == 1:
+            return str(days) + " day " + str(hours) + " hours " + str(minutes) + " minutes ago"
+        else:
+            return str(days) + " days " + str(hours) + " hours " + str(minutes) + " minutes ago"
+    elif hours > 1:
+        if hours == 1:
+            return str(hours) + " hour " + str(minutes) + " minutes ago"
+        else:
+            return str(hours) + " hours " + str(minutes) + " minutes ago"
+    elif minutes > 1:
+        if minutes == 1:
+            return str(minutes) + " minute ago"
+        else:
+            return str(minutes) + " minutes ago"
+    else:
+        return "just now"
+
+
+# Begins timer to remove idle player
 
 async def playertimer(server, chan, channelname, gametype, name):
     await asyncio.sleep(7200)
@@ -848,6 +876,10 @@ async def pickplayer(pickedplayer, name, server, serverid, channel, channelid):
 
 # Define buttons for use in history (/last) command
 class last_buttons(disnake.ui.View):
+
+    def __init__(self):
+        super().__init__(timeout=600)
+
     @disnake.ui.button(label="⏮ (0)", style=disnake.ButtonStyle.green)
     async def back(self, button: disnake.ui.Button, interaction: disnake.MessageInteraction):
         number = button.label
@@ -864,17 +896,14 @@ class last_buttons(disnake.ui.View):
             "ORDER BY team DESC, pickorder ASC")
         time = c.fetchall()
         time = [i[0] for i in time]
-        timediff = str(time_elapsed(time[0]))
+
+        timesincelast = secs_to_days(time[0])
 
         c.execute(
             "SELECT time FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) - " + str(
                 number) + " from HISTORY) ORDER BY team DESC, pickorder ASC")
         date = c.fetchall()
         date = [i[0] for i in date]
-
-        timediff = timediff.replace('[', '')
-        timediff = timediff.replace(']', '')
-        timediff = timediff.replace("'", '')
 
         c.execute(
             "SELECT gametype FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) - " + str(
@@ -888,7 +917,7 @@ class last_buttons(disnake.ui.View):
         bluepicks = list_historical_picks(gametype[0], 'blue', number)
 
         embed = disnake.Embed(
-            title="Last " + str(gametype[0]) + ": " + str(timediff) + " ago",
+            title="Last " + str(gametype[0]) + ": " + str(timesincelast),
             description="Date: " + date[0],
             colour=0xF0C43F,
         )
@@ -914,17 +943,14 @@ class last_buttons(disnake.ui.View):
                 number) + " from HISTORY) ORDER BY team DESC, pickorder ASC")
         time = c.fetchall()
         time = [i[0] for i in time]
-        timediff = str(time_elapsed(time[0]))
+
+        timesincelast = secs_to_days(time[0])
 
         c.execute(
             "SELECT time FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) - " + str(
                 number) + " from HISTORY) ORDER BY team DESC, pickorder ASC")
         date = c.fetchall()
         date = [i[0] for i in date]
-
-        timediff = timediff.replace('[', '')
-        timediff = timediff.replace(']', '')
-        timediff = timediff.replace("'", '')
 
         c.execute(
             "SELECT gametype FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) - " + str(
@@ -938,7 +964,7 @@ class last_buttons(disnake.ui.View):
         bluepicks = list_historical_picks(gametype[0], 'blue', number)
 
         embed = disnake.Embed(
-            title="Last " + str(gametype[0]) + ": " + str(timediff) + " ago",
+            title="Last " + str(gametype[0]) + ": " + str(timesincelast),
             description="Date: " + date[0],
             colour=0xF0C43F,
         )
@@ -1336,16 +1362,12 @@ async def last(inter, gametype: str = None):
         "SELECT (julianday('now') - julianday(time)) * 24 * 60 * 60  FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) ORDER BY team DESC, pickorder ASC")
     time = c.fetchall()
     time = [i[0] for i in time]
-    timediff = str(time_elapsed(time[0]))
+    timesincelast = secs_to_days(time[0])
 
     c.execute(
         "SELECT time FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) ORDER BY team DESC, pickorder ASC")
     date = c.fetchall()
     date = [i[0] for i in date]
-
-    timediff = timediff.replace('[', '')
-    timediff = timediff.replace(']', '')
-    timediff = timediff.replace("'", '')
 
     c.execute(
         "SELECT gametype FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) ORDER BY team DESC, pickorder ASC")
@@ -1358,7 +1380,7 @@ async def last(inter, gametype: str = None):
     bluepicks = list_historical_picks(gametype[0], 'blue')
 
     embed = disnake.Embed(
-        title="Last " + str(gametype[0]) + ": " + str(timediff) + " ago",
+        title="Last " + str(gametype[0]) + ": " + str(timesincelast),
         description="Date: " + date[0],
         colour=0xF0C43F,
     )
@@ -1483,7 +1505,7 @@ async def delmap(inter, gametype, map):
 class JoinLeaveButtons(disnake.ui.View):
 
     def __init__(self, gametype):
-        super().__init__()
+        super().__init__(timeout=600)
         self.gametype = gametype
 
     # Join button. Steals code from join command. #!#!#! Need to make join a simple function instead
