@@ -1010,17 +1010,29 @@ async def addmod(inter, gametype: str, playernum: str, pickorder: str):
 
 @bot.slash_command(description="Remove a gametype")
 async def delmod(inter, gametype: str):
-    c.execute(
-        "DELETE FROM modsettings WHERE mod = '" + gametype +
-        "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "' ;")
-    conn.commit()
+
+    #!#!#! Check that it exists to prevent injection
 
     c.execute(
-        "DELETE FROM playerlist WHERE mod = '" + gametype +
+        "SELECT mod FROM modsettings WHERE mod = '" + gametype +
         "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "' ;")
-    conn.commit()
+    mod = c.fetchall()
 
-    await inter.send(f'{gametype} has been removed')
+
+    if not mod:
+        await inter.send(f'{gametype} does not exist')
+    else:
+        c.execute(
+            "DELETE FROM modsettings WHERE mod = '" + gametype +
+            "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "' ;")
+        conn.commit()
+
+        c.execute(
+            "DELETE FROM playerlist WHERE mod = '" + gametype +
+            "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "' ;")
+        conn.commit()
+
+        await inter.send(f'{gametype} has been removed')
 
 
 ###################################################################################################################
@@ -1284,8 +1296,11 @@ async def reset(inter, gametype: str):
     c.execute("UPDATE temp SET team = 0 WHERE team is NOT 0")
     conn.commit()
 
-    # remove previously assigned teams
     c.execute("UPDATE temp SET captain = NULL")
+    conn.commit()
+
+    # remove previously assigned pick orders
+    c.execute("UPDATE temp SET pickorder = 0")
     conn.commit()
 
     # start new countdown
