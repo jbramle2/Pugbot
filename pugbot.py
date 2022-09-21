@@ -107,12 +107,13 @@ def listpicks(gametype):
     modnameparsed = 'temp'
 
     # !#!#!#!#!#!#!#!#! ROW ID NEEDS TO BE AN ACTUAL PICK INDEX VARIABLE IN COLUMN  #!#!#!#!#!#!#!#!
+    # !#!#! Also check for server and channel. Good enough for now.
 
-    c.execute("SELECT rowid, playername FROM " + modnameparsed + " WHERE pickorder is 0 AND captain IS NULL")
+    c.execute("SELECT rowid, playername FROM " + modnameparsed + " WHERE pickorder is 0 AND captain IS NULL AND gametype = '" + str(gametype) + "'")
 
     response = c.fetchall()
 
-    c.execute("SELECT rowid FROM " + modnameparsed + " WHERE pickorder is 0 AND captain IS NULL")
+    c.execute("SELECT rowid FROM " + modnameparsed + " WHERE pickorder is 0 AND captain IS NULL AND gametype = '" + str(gametype) + "'")
     pickindex = c.fetchall()
     final_result = [i[0] for i in pickindex]
 
@@ -1011,11 +1012,9 @@ async def addmod(inter, gametype: str, playernum: str, pickorder: str):
 @bot.slash_command(description="Remove a gametype")
 async def delmod(inter, gametype: str):
 
-    #!#!#! Check that it exists to prevent injection
-
     c.execute(
         "SELECT mod FROM modsettings WHERE mod = '" + gametype +
-        "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "' ;")
+        "' AND serverid = '" + str(inter.guild.id) + "' AND channelid = '" + str(inter.channel.id) + "' ;")
     mod = c.fetchall()
 
 
@@ -1024,12 +1023,12 @@ async def delmod(inter, gametype: str):
     else:
         c.execute(
             "DELETE FROM modsettings WHERE mod = '" + gametype +
-            "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "' ;")
+            "' AND serverid = '" + str(inter.guild.id) + "' AND channelid = '" + str(inter.channel.id) + "' ;")
         conn.commit()
 
         c.execute(
             "DELETE FROM playerlist WHERE mod = '" + gametype +
-            "' AND server = '" + inter.guild.name + "' AND channel = '" + inter.channel.name + "' ;")
+            "' AND serverid = '" + str(inter.guild.id) + "' AND channelid = '" + str(inter.channel.id) + "' ;")
         conn.commit()
 
         await inter.send(f'{gametype} has been removed')
@@ -1374,18 +1373,24 @@ async def captain(inter):
 @bot.slash_command(description="Show last pick up game")
 async def last(inter, gametype: str = None):
     c.execute(
-        "SELECT (julianday('now') - julianday(time)) * 24 * 60 * 60  FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) ORDER BY team DESC, pickorder ASC")
+        "SELECT (julianday('now') - julianday(time)) * 24 * 60 * 60  "
+        "FROM HISTORY "
+        "WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) ORDER BY team DESC, pickorder ASC")
     time = c.fetchall()
     time = [i[0] for i in time]
     timesincelast = secs_to_days(time[0])
 
     c.execute(
-        "SELECT time FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) ORDER BY team DESC, pickorder ASC")
+        "SELECT time "
+        "FROM HISTORY "
+        "WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) ORDER BY team DESC, pickorder ASC")
     date = c.fetchall()
     date = [i[0] for i in date]
 
     c.execute(
-        "SELECT gametype FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) ORDER BY team DESC, pickorder ASC")
+        "SELECT gametype "
+        "FROM HISTORY "
+        "WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) ORDER BY team DESC, pickorder ASC")
     gametype = c.fetchall()
     gametype = [i[0] for i in gametype]
 
