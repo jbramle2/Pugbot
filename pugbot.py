@@ -1513,6 +1513,27 @@ async def delmap(inter, gametype, map):
     await inter.send(str(map) + ' removed from ' + str(gametype))
     return ()
 
+@bot.slash_command(description="Promote a gametype")
+async def promote(inter, gametype):
+    c.execute(
+        "SELECT COUNT(*) FROM playerlist "
+        "WHERE mod = '" + gametype + "' AND serverid = '" + str(inter.guild.id) + "' AND channelid = '"
+        + str(inter.channel.id) + "'")
+    number_in = c.fetchall()
+    number_in = str(number_in).strip('[](),')
+
+    c.execute(
+        "SELECT playerlimit FROM modsettings "
+        "WHERE mod = '" + gametype + "' AND serverid = '" + str(inter.guild.id) + "' AND channelid = '"
+        + str(inter.channel.id) + "'")
+    number_needed = c.fetchall()
+    number_needed = str(number_needed).strip('[](),')
+
+    remaining = int(number_needed) - int(number_in)
+
+    buttons = JoinLeaveButtons(gametype=gametype)
+
+    await inter.send(f'@here Only {remaining} needed for **{gametype}**', view=buttons)
 
 ###################################################################################################################
 ###################################################################################################################
