@@ -3,6 +3,9 @@ from disnake.ext import commands
 import sqlite3
 import asyncio
 import random
+import psycopg2
+from datetime import datetime
+import pytz
 
 bot = commands.Bot(
     command_prefix='!',
@@ -13,10 +16,20 @@ bot = commands.Bot(
 conn = sqlite3.connect("pugbotdb.db")
 c = conn.cursor()
 
+with open('stats_pass.txt', 'r') as t:
+    stats_pass = t.read()
+
+conn_game = psycopg2.connect(
+    host="104.153.105.63",
+    database="utstats",
+    user="utstats",
+    password=stats_pass,
+    port=5432)
+
+c2 = conn_game.cursor()
+
 with open('token.txt', 'r') as t:
     discordtoken = t.read()
-
-print(discordtoken)
 
 # creates a running list of asyncio tasks
 runninglist = []
@@ -32,6 +45,19 @@ async def on_ready():
 # Functions
 ########
 ###################################################################################################################
+
+# Formats player lists from SQL to Discord readable.
+def parse_players(list_to_parse):
+    parsed_players = str(list_to_parse).replace('(', '**')
+    parsed_players = parsed_players.replace(')', '')
+    parsed_players = parsed_players.replace(", '", ')** ')
+    parsed_players = parsed_players.replace("'", '')
+    parsed_players = parsed_players.replace(', ', ':small_orange_diamond:')
+    parsed_players = parsed_players.replace(',', '')
+    parsed_players = parsed_players.replace(']', '')
+    parsed_players = parsed_players.replace('[', '')
+    parsed_players = str(parsed_players)+"**"
+    return parsed_players
 
 # Returns players in a gametype
 def listplayers(gametype, server, channel):
@@ -173,6 +199,8 @@ def list_historical_picks(gametype, team, back: str = '0'):
 
     response = c.fetchall()
 
+    print(response)
+
     parsedresponse = str(response).replace('(', '**')
     parsedresponse = parsedresponse.replace(')', '')
     parsedresponse = parsedresponse.replace(", '", ')** ')
@@ -231,7 +259,7 @@ def randcapt(gametype, numplayers, server, channel, captain_count=2):
     return playerstr1, playerstr2
 
 
-# Rounds time to minutes / hours based on seconds | Used in displaying players time waiting in a pug
+# Rounds time to the minute / hours based on seconds | Used in displaying players time waiting in a pug
 def time_elapsed(seconds):
     if seconds > 3600:
         a = str(int(seconds // 3600))
@@ -875,106 +903,7 @@ async def pickplayer(pickedplayer, name, server, serverid, channel, channelid):
     return ()
 
 
-# Define buttons for use in history (/last) command
-class last_buttons(disnake.ui.View):
 
-    def __init__(self):
-        super().__init__(timeout=600)
-
-    @disnake.ui.button(label="⏮ (0)", style=disnake.ButtonStyle.green)
-    async def back(self, button: disnake.ui.Button, interaction: disnake.MessageInteraction):
-        number = button.label
-        number = number.replace("(", "")
-        number = number.replace(")", "")
-        number = number.replace(" ", "")
-        number = number.replace("⏮", "")
-        print(number)
-
-        c.execute(
-            "SELECT (julianday('now') - julianday(time)) * 24 * 60 * 60  "
-            "FROM HISTORY "
-            "WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) "
-            "ORDER BY team DESC, pickorder ASC")
-        time = c.fetchall()
-        time = [i[0] for i in time]
-
-        timesincelast = secs_to_days(time[0])
-
-        c.execute(
-            "SELECT time FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) - " + str(
-                number) + " from HISTORY) ORDER BY team DESC, pickorder ASC")
-        date = c.fetchall()
-        date = [i[0] for i in date]
-
-        c.execute(
-            "SELECT gametype FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) - " + str(
-                number) + " from HISTORY) ORDER BY team DESC, pickorder ASC")
-        gametype = c.fetchall()
-        gametype = [i[0] for i in gametype]
-
-        # await inter.send(f' **Last {str(gametype[0])}:** {str(timediff)} ago')
-
-        redpicks = list_historical_picks(gametype[0], 'red', number)
-        bluepicks = list_historical_picks(gametype[0], 'blue', number)
-
-        embed = disnake.Embed(
-            title="Last " + str(gametype[0]) + ": " + str(timesincelast),
-            description="Date: " + date[0],
-            colour=0xF0C43F,
-        )
-
-        embed.add_field(name="Red Team", value=str(redpicks), inline=False)
-        embed.add_field(name="Blue Team", value=str(bluepicks), inline=False)
-
-        await interaction.response.edit_message(embed=embed, view=last_buttons())
-
-    @disnake.ui.button(label="(1) ⏩", style=disnake.ButtonStyle.green)
-    async def count(self, button: disnake.ui.Button, interaction: disnake.MessageInteraction):
-        number = button.label
-        number = number.replace("(", "")
-        number = number.replace(")", "")
-        number = number.replace(" ", "")
-        number = number.replace("⏩", "")
-        print(number)
-
-        button.label = "(" + str(int(number) + 1) + ") ⏩"
-
-        c.execute(
-            "SELECT (julianday('now') - julianday(time)) * 24 * 60 * 60  FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) - " + str(
-                number) + " from HISTORY) ORDER BY team DESC, pickorder ASC")
-        time = c.fetchall()
-        time = [i[0] for i in time]
-
-        timesincelast = secs_to_days(time[0])
-
-        c.execute(
-            "SELECT time FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) - " + str(
-                number) + " from HISTORY) ORDER BY team DESC, pickorder ASC")
-        date = c.fetchall()
-        date = [i[0] for i in date]
-
-        c.execute(
-            "SELECT gametype FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) - " + str(
-                number) + " from HISTORY) ORDER BY team DESC, pickorder ASC")
-        gametype = c.fetchall()
-        gametype = [i[0] for i in gametype]
-
-        # await inter.send(f' **Last {str(gametype[0])}:** {str(timediff)} ago')
-
-        redpicks = list_historical_picks(gametype[0], 'red', number)
-        bluepicks = list_historical_picks(gametype[0], 'blue', number)
-
-        embed = disnake.Embed(
-            title="Last " + str(gametype[0]) + ": " + str(timesincelast),
-            description="Date: " + date[0],
-            colour=0xF0C43F,
-        )
-
-        embed.add_field(name="Red Team", value=str(redpicks), inline=False)
-        embed.add_field(name="Blue Team", value=str(bluepicks), inline=False)
-
-        # update the message
-        await interaction.response.edit_message(embed=embed, view=self)
 
 
 ###################################################################################################################
@@ -1371,44 +1300,92 @@ async def captain(inter):
 ###################################################################################################################
 
 @bot.slash_command(description="Show last pick up game")
-async def last(inter, gametype: str = None):
-    c.execute(
-        "SELECT (julianday('now') - julianday(time)) * 24 * 60 * 60  "
-        "FROM HISTORY "
-        "WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) ORDER BY team DESC, pickorder ASC")
-    time = c.fetchall()
-    time = [i[0] for i in time]
-    timesincelast = secs_to_days(time[0])
+async def last(inter, sel_gametype: str = None):
 
-    c.execute(
-        "SELECT time "
-        "FROM HISTORY "
-        "WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) ORDER BY team DESC, pickorder ASC")
-    date = c.fetchall()
-    date = [i[0] for i in date]
+    if sel_gametype:
 
-    c.execute(
-        "SELECT gametype "
-        "FROM HISTORY "
-        "WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) ORDER BY team DESC, pickorder ASC")
-    gametype = c.fetchall()
-    gametype = [i[0] for i in gametype]
+        c.execute(
+            "SELECT (julianday('now') - julianday(time)) * 24 * 60 * 60  "
+            "FROM HISTORY "
+            "WHERE gameindex = (SELECT MAX(gameindex) from HISTORY WHERE gametype = '"+sel_gametype+"')"
+            "ORDER BY team DESC, pickorder ASC")
+        time = c.fetchall()
+        time = [i[0] for i in time]
+        timesincelast = secs_to_days(time[0])
 
-    # await inter.send(f' **Last {str(gametype[0])}:** {str(timediff)} ago')
+        c.execute(
+            "SELECT time "
+            "FROM HISTORY "
+            "WHERE gameindex = (SELECT MAX(gameindex) from HISTORY WHERE gametype = '"+sel_gametype+"')"
+            "ORDER BY team DESC, pickorder ASC")
+        date = c.fetchall()
+        date = [i[0] for i in date]
 
-    redpicks = list_historical_picks(gametype[0], 'red')
-    bluepicks = list_historical_picks(gametype[0], 'blue')
+        c.execute(
+            "SELECT gametype "
+            "FROM HISTORY "
+            "WHERE gameindex = (SELECT MAX(gameindex) from HISTORY WHERE gametype = '"+sel_gametype+"')"
+            "ORDER BY team DESC, pickorder ASC")
+        gametype = c.fetchall()
+        gametype = [i[0] for i in gametype]
 
-    embed = disnake.Embed(
-        title="Last " + str(gametype[0]) + ": " + str(timesincelast),
-        description="Date: " + date[0],
-        colour=0xF0C43F,
-    )
+        print(gametype)
+        print(sel_gametype)
 
-    embed.add_field(name="Red Team", value=str(redpicks), inline=False)
-    embed.add_field(name="Blue Team", value=str(bluepicks), inline=False)
+        redpicks = list_historical_picks(sel_gametype, 'red')
+        bluepicks = list_historical_picks(str(sel_gametype), 'blue')
 
-    await inter.send(embed=embed, view=last_buttons())
+        embed = disnake.Embed(
+            title="Last " + str(gametype[0]) + ": " + str(timesincelast),
+            description="Date: " + date[0],
+            colour=0xF0C43F,
+        )
+
+        embed.add_field(name="Red Team", value=str(redpicks), inline=False)
+        embed.add_field(name="Blue Team", value=str(bluepicks), inline=False)
+
+        await inter.send(embed=embed, view=last_buttons(sel_gametype))
+
+    else:
+
+        c.execute(
+            "SELECT (julianday('now') - julianday(time)) * 24 * 60 * 60  "
+            "FROM HISTORY "
+            "WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) ORDER BY team DESC, pickorder ASC")
+        time = c.fetchall()
+        time = [i[0] for i in time]
+        timesincelast = secs_to_days(time[0])
+
+        c.execute(
+            "SELECT time "
+            "FROM HISTORY "
+            "WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) ORDER BY team DESC, pickorder ASC")
+        date = c.fetchall()
+        date = [i[0] for i in date]
+
+        c.execute(
+            "SELECT gametype "
+            "FROM HISTORY "
+            "WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) ORDER BY team DESC, pickorder ASC")
+        gametype = c.fetchall()
+        gametype = [i[0] for i in gametype]
+
+        print(gametype)
+        print(gametype[0])
+
+        redpicks = list_historical_picks(gametype[0], 'red')
+        bluepicks = list_historical_picks(gametype[0], 'blue')
+
+        embed = disnake.Embed(
+            title="Last " + str(gametype[0]) + ": " + str(timesincelast),
+            description="Date: " + date[0],
+            colour=0xF0C43F,
+        )
+
+        embed.add_field(name="Red Team", value=str(redpicks), inline=False)
+        embed.add_field(name="Blue Team", value=str(bluepicks), inline=False)
+
+        await inter.send(embed=embed, view=last_buttons())
 
 
 ###################################################################################################################
@@ -1513,6 +1490,10 @@ async def delmap(inter, gametype, map):
     await inter.send(str(map) + ' removed from ' + str(gametype))
     return ()
 
+###################################################################################################################
+# Promotes a specific pick up game
+###################################################################################################################
+
 @bot.slash_command(description="Promote a gametype")
 async def promote(inter, gametype):
     c.execute(
@@ -1536,10 +1517,314 @@ async def promote(inter, gametype):
     await inter.send(f'@here Only {remaining} needed for **{gametype}**', view=buttons)
 
 ###################################################################################################################
+# Retrieves latest game for given gametype from SQL database
+###################################################################################################################
+
+@bot.slash_command(description="Show last pick up game from server")
+async def latest(inter, gametype: str = ''):
+
+    if gametype == "blitz":
+        gametype = "UTFlagRunGame"
+
+    c2.execute("SELECT servername, gamemode, redteamscore, blueteamscore, date, matchid, gamemap "
+               "FROM utstats_match "
+               "WHERE servername LIKE '%UTPugs%' AND gamemode iLIKE '%"+str(gametype)+"%' "
+               "ORDER BY matchid DESC LIMIT 10")
+
+    data = c2.fetchall()
+
+    server_name = data[0][0]
+    game_mode = data[0][1]
+    red_team_score = data[0][2]
+    blue_team_score = data[0][3]
+    date = data[0][4]
+    match_id = data[0][5]
+    map_name = data[0][6]
+
+    est = pytz.timezone('US/Eastern')
+    date = date.astimezone(est).strftime("%b %d, %Y %I:%M%p %Z")
+
+    if game_mode == "UTCTFGameMode":
+        game_mode = "CTF"
+    elif game_mode == "UTDuelGame":
+        game_mode = "Duel"
+    elif game_mode == "Elimination_113_C":
+        game_mode = "Elimination"
+    elif game_mode == "UTFlagRunGame":
+        game_mode = "Blitz"
+
+
+    c2.execute("SELECT p.playername "
+               "FROM utstats_matchstats m, utstats_player p "
+               "WHERE p.playerid = m.playerid_id AND m.matchid_id = '"+str(match_id)+"' AND m.team = 'Red'")
+
+    red_team_players = c2.fetchall()
+    red_team_players = parse_players(red_team_players)
+
+    c2.execute("SELECT p.playername "
+               "FROM utstats_matchstats m, utstats_player p "
+               "WHERE p.playerid = m.playerid_id AND m.matchid_id = '"+str(match_id)+"' AND m.team = 'Blue'")
+
+    blue_team_players = c2.fetchall()
+    blue_team_players = parse_players(blue_team_players)
+
+    embed = disnake.Embed(
+        title="Latest " + str(game_mode) + " on " + str(server_name),
+        url="https://ut4stats.com/match_summary/"+str(match_id)+"",
+        description="Date: " + str(date) + "\n Map: "+map_name+"",
+        colour=0xF0C43F,
+    )
+    embed.add_field(name="Red Team Score: "+str(red_team_score)+"", value=str(red_team_players), inline=True)
+    embed.add_field(name="Blue Team Score: "+str(blue_team_score)+"", value=str(blue_team_players), inline=False)
+
+    await inter.send(embed=embed, view=latest_buttons(gametype))
+
+###################################################################################################################
+
+###################################################################################################################
 ###################################################################################################################
 # Misc
 ###################################################################################################################
 ###################################################################################################################
+
+class latest_buttons(disnake.ui.View):
+
+    def __init__(self, gametype: str = ''):
+        super().__init__(timeout=600)
+        self.gametype = gametype
+
+    @disnake.ui.button(label="⏮ (0)", style=disnake.ButtonStyle.green)
+    async def back(self, button: disnake.ui.Button, interaction: disnake.MessageInteraction):
+
+        gametype = self.gametype
+
+        if gametype == "blitz":
+            gametype = "UTFlagRunGame"
+
+        c2.execute("SELECT servername, gamemode, redteamscore, blueteamscore, date, matchid, gamemap "
+                   "FROM utstats_match "
+                   "WHERE servername LIKE '%UTPugs%' AND gamemode iLIKE '%" + str(gametype) + "%' "
+                   "ORDER BY matchid DESC LIMIT 10")
+
+        data = c2.fetchall()
+
+        server_name = data[0][0]
+        game_mode = data[0][1]
+        red_team_score = data[0][2]
+        blue_team_score = data[0][3]
+        date = data[0][4]
+        match_id = data[0][5]
+        map_name = data[0][6]
+
+        est = pytz.timezone('US/Eastern')
+        date = date.astimezone(est).strftime("%b %d, %Y %I:%M%p %Z")
+
+        if game_mode == "UTCTFGameMode":
+            game_mode = "CTF"
+        elif game_mode == "UTDuelGame":
+            game_mode = "Duel"
+        elif game_mode == "Elimination_113_C":
+            game_mode = "Elimination"
+        elif game_mode == "UTFlagRunGame":
+            game_mode = "Blitz"
+
+        c2.execute("SELECT p.playername "
+                   "FROM utstats_matchstats m, utstats_player p "
+                   "WHERE p.playerid = m.playerid_id AND m.matchid_id = '" + str(match_id) + "' AND m.team = 'Red'")
+
+        red_team_players = c2.fetchall()
+        red_team_players = parse_players(red_team_players)
+
+        c2.execute("SELECT p.playername "
+                   "FROM utstats_matchstats m, utstats_player p "
+                   "WHERE p.playerid = m.playerid_id AND m.matchid_id = '" + str(match_id) + "' AND m.team = 'Blue'")
+
+        blue_team_players = c2.fetchall()
+        blue_team_players = parse_players(blue_team_players)
+
+        embed = disnake.Embed(
+            title="Latest " + str(game_mode) + " on " + str(server_name),
+            url="https://ut4stats.com/match_summary/" + str(match_id) + "",
+            description="Date: " + str(date) + "\n Map: " + map_name + "",
+            colour=0xF0C43F,
+        )
+        embed.add_field(name="Red Team Score: " + str(red_team_score) + "", value=str(red_team_players), inline=True)
+        embed.add_field(name="Blue Team Score: " + str(blue_team_score) + "", value=str(blue_team_players),
+                        inline=False)
+
+        await interaction.response.edit_message(embed=embed, view=latest_buttons())
+
+    @disnake.ui.button(label="(1) ⏩", style=disnake.ButtonStyle.green)
+    async def count(self, button: disnake.ui.Button, interaction: disnake.MessageInteraction):
+        number = button.label
+        number = number.replace("(", "")
+        number = number.replace(")", "")
+        number = number.replace(" ", "")
+        number = number.replace("⏩", "")
+        print(number)
+
+        gametype = self.gametype
+
+        button.label = "(" + str(int(number) + 1) + ") ⏩"
+
+        if gametype == "blitz":
+            gametype = "UTFlagRunGame"
+
+        c2.execute("SELECT servername, gamemode, redteamscore, blueteamscore, date, matchid, gamemap "
+                   "FROM utstats_match "
+                   "WHERE servername LIKE '%UTPugs%' AND gamemode iLIKE '%" + str(gametype) + "%' "
+                   "ORDER BY matchid DESC LIMIT 10")
+
+        data = c2.fetchall()
+
+        server_name = data[0+int(number)][0]
+        game_mode = data[0+int(number)][1]
+        red_team_score = data[0+int(number)][2]
+        blue_team_score = data[0+int(number)][3]
+        date = data[0+int(number)][4]
+        match_id = data[0+int(number)][5]
+        map_name = data[0+int(number)][6]
+
+        est = pytz.timezone('US/Eastern')
+        date = date.astimezone(est).strftime("%b %d, %Y %I:%M%p %Z")
+
+        if game_mode == "UTCTFGameMode":
+            game_mode = "CTF"
+        elif game_mode == "UTDuelGame":
+            game_mode = "Duel"
+        elif game_mode == "Elimination_113_C":
+            game_mode = "Elimination"
+        elif game_mode == "UTFlagRunGame":
+            game_mode = "Blitz"
+
+        c2.execute("SELECT p.playername "
+                   "FROM utstats_matchstats m, utstats_player p "
+                   "WHERE p.playerid = m.playerid_id AND m.matchid_id = '" + str(match_id) + "' AND m.team = 'Red'")
+
+        red_team_players = c2.fetchall()
+        red_team_players = parse_players(red_team_players)
+
+        c2.execute("SELECT p.playername "
+                   "FROM utstats_matchstats m, utstats_player p "
+                   "WHERE p.playerid = m.playerid_id AND m.matchid_id = '" + str(match_id) + "' AND m.team = 'Blue'")
+
+        blue_team_players = c2.fetchall()
+        blue_team_players = parse_players(blue_team_players)
+
+        embed = disnake.Embed(
+            title="Latest " + str(game_mode) + " on " + str(server_name),
+            url="https://ut4stats.com/match_summary/" + str(match_id) + "",
+            description="Date: " + str(date) + "\n Map: " + map_name + "",
+            colour=0xF0C43F,
+        )
+        embed.add_field(name="Red Team Score: " + str(red_team_score) + "", value=str(red_team_players), inline=True)
+        embed.add_field(name="Blue Team Score: " + str(blue_team_score) + "", value=str(blue_team_players),
+                        inline=False)
+
+        await interaction.response.edit_message(embed=embed, view=self)
+
+
+
+# Define buttons for use in history (/last) command
+class last_buttons(disnake.ui.View):
+
+    def __init__(self):
+        super().__init__(timeout=600)
+
+    @disnake.ui.button(label="⏮ (0)", style=disnake.ButtonStyle.green)
+    async def back(self, button: disnake.ui.Button, interaction: disnake.MessageInteraction):
+        number = button.label
+        number = number.replace("(", "")
+        number = number.replace(")", "")
+        number = number.replace(" ", "")
+        number = number.replace("⏮", "")
+        print(number)
+
+        c.execute(
+            "SELECT (julianday('now') - julianday(time)) * 24 * 60 * 60  "
+            "FROM HISTORY "
+            "WHERE gameindex = (SELECT MAX(gameindex) from HISTORY) "
+            "ORDER BY team DESC, pickorder ASC")
+        time = c.fetchall()
+        time = [i[0] for i in time]
+
+        timesincelast = secs_to_days(time[0])
+
+        c.execute(
+            "SELECT time FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) - " + str(
+                number) + " from HISTORY) ORDER BY team DESC, pickorder ASC")
+        date = c.fetchall()
+        date = [i[0] for i in date]
+
+        c.execute(
+            "SELECT gametype FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) - " + str(
+                number) + " from HISTORY) ORDER BY team DESC, pickorder ASC")
+        gametype = c.fetchall()
+        gametype = [i[0] for i in gametype]
+
+        redpicks = list_historical_picks(gametype[0], 'red', number)
+        bluepicks = list_historical_picks(gametype[0], 'blue', number)
+
+        embed = disnake.Embed(
+            title="Last " + str(gametype[0]) + ": " + str(timesincelast),
+            description="Date: " + date[0],
+            colour=0xF0C43F,
+        )
+
+        embed.add_field(name="Red Team", value=str(redpicks), inline=False)
+        embed.add_field(name="Blue Team", value=str(bluepicks), inline=False)
+
+        await interaction.response.edit_message(embed=embed, view=last_buttons())
+
+    @disnake.ui.button(label="(1) ⏩", style=disnake.ButtonStyle.green)
+    async def count(self, button: disnake.ui.Button, interaction: disnake.MessageInteraction):
+        number = button.label
+        number = number.replace("(", "")
+        number = number.replace(")", "")
+        number = number.replace(" ", "")
+        number = number.replace("⏩", "")
+        print(number)
+
+        button.label = "(" + str(int(number) + 1) + ") ⏩"
+
+        c.execute(
+            "SELECT (julianday('now') - julianday(time)) * 24 * 60 * 60  FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) - " + str(
+                number) + " from HISTORY) ORDER BY team DESC, pickorder ASC")
+        time = c.fetchall()
+        time = [i[0] for i in time]
+
+        timesincelast = secs_to_days(time[0])
+
+        c.execute(
+            "SELECT time FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) - " + str(
+                number) + " from HISTORY) ORDER BY team DESC, pickorder ASC")
+        date = c.fetchall()
+        date = [i[0] for i in date]
+
+        c.execute(
+            "SELECT gametype FROM HISTORY WHERE gameindex = (SELECT MAX(gameindex) - " + str(
+                number) + " from HISTORY) ORDER BY team DESC, pickorder ASC")
+        gametype = c.fetchall()
+        gametype = [i[0] for i in gametype]
+
+        # await inter.send(f' **Last {str(gametype[0])}:** {str(timediff)} ago')
+
+        redpicks = list_historical_picks(gametype[0], 'red', number)
+        bluepicks = list_historical_picks(gametype[0], 'blue', number)
+
+        embed = disnake.Embed(
+            title="Last " + str(gametype[0]) + ": " + str(timesincelast),
+            description="Date: " + date[0],
+            colour=0xF0C43F,
+        )
+
+        embed.add_field(name="Red Team", value=str(redpicks), inline=False)
+        embed.add_field(name="Blue Team", value=str(bluepicks), inline=False)
+
+        # update the message
+        await interaction.response.edit_message(embed=embed, view=self)
+
+
 
 # Class for join/leave buttons
 
