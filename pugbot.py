@@ -13,7 +13,7 @@ bot = commands.Bot(
     command_prefix='!',
     test_guilds=[482012169911664640, 192460940409700352],
     sync_commands_debug=True
-    )
+)
 
 conn = sqlite3.connect("pugbotdb.db")
 c = conn.cursor()
@@ -36,6 +36,7 @@ with open('token.txt', 'r') as t:
 # creates a running list of asyncio tasks
 runninglist = []
 
+
 # Tell me bot is running
 @bot.event
 async def on_ready():
@@ -53,16 +54,20 @@ async def on_ready():
 
 # Formats player lists from SQL to Discord readable.
 def parse_players(list_to_parse):
-    parsed_players = str(list_to_parse).replace('(', '**')
-    parsed_players = parsed_players.replace(')', '')
-    parsed_players = parsed_players.replace(", '", ')** ')
-    parsed_players = parsed_players.replace("'", '')
-    parsed_players = parsed_players.replace(', ', ':small_orange_diamond:')
-    parsed_players = parsed_players.replace(',', '')
-    parsed_players = parsed_players.replace(']', '')
-    parsed_players = parsed_players.replace('[', '')
-    parsed_players = str(parsed_players)+"**"
+    print(list_to_parse)
+    print(list_to_parse[0][0])
+
+    parsed_players = ""
+
+    for i in range(len(list_to_parse)):
+
+        if i < (len(list_to_parse)-1):
+            parsed_players += list_to_parse[i][0] + " :small_orange_diamond: "
+        else:
+            parsed_players += list_to_parse[i][0]
+
     return parsed_players
+
 
 # Returns players in a gametype
 def listplayers(gametype, server, channel):
@@ -140,11 +145,14 @@ def listpicks(gametype):
     # !#!#!#!#!#!#!#!#! ROW ID NEEDS TO BE AN ACTUAL PICK INDEX VARIABLE IN COLUMN  #!#!#!#!#!#!#!#!
     # !#!#! Also check for server and channel. Good enough for now.
 
-    c.execute("SELECT rowid, playername FROM " + modnameparsed + " WHERE pickorder is 0 AND captain IS NULL AND gametype = '" + str(gametype) + "'")
+    c.execute(
+        "SELECT rowid, playername FROM " + modnameparsed + " WHERE pickorder is 0 AND captain IS NULL AND gametype = '" + str(
+            gametype) + "'")
 
     response = c.fetchall()
 
-    c.execute("SELECT rowid FROM " + modnameparsed + " WHERE pickorder is 0 AND captain IS NULL AND gametype = '" + str(gametype) + "'")
+    c.execute("SELECT rowid FROM " + modnameparsed + " WHERE pickorder is 0 AND captain IS NULL AND gametype = '" + str(
+        gametype) + "'")
     pickindex = c.fetchall()
     final_result = [i[0] for i in pickindex]
 
@@ -906,9 +914,6 @@ async def pickplayer(pickedplayer, name, server, serverid, channel, channelid):
     return ()
 
 
-
-
-
 ###################################################################################################################
 ########
 # Slash Commands
@@ -943,12 +948,10 @@ async def addmod(inter, gametype: str, playernum: str, pickorder: str):
 
 @bot.slash_command(description="Remove a gametype")
 async def delmod(inter, gametype: str):
-
     c.execute(
         "SELECT mod FROM modsettings WHERE mod = '" + gametype +
         "' AND serverid = '" + str(inter.guild.id) + "' AND channelid = '" + str(inter.channel.id) + "' ;")
     mod = c.fetchall()
-
 
     if not mod:
         await inter.send(f'{gametype} does not exist')
@@ -1304,14 +1307,13 @@ async def captain(inter):
 
 @bot.slash_command(description="Show last pick up game")
 async def last(inter, sel_gametype: str = None):
-
     if sel_gametype:
 
         c.execute(
             "SELECT (julianday('now') - julianday(time)) * 24 * 60 * 60  "
             "FROM HISTORY "
-            "WHERE gameindex = (SELECT MAX(gameindex) from HISTORY WHERE gametype = '"+sel_gametype+"')"
-            "ORDER BY team DESC, pickorder ASC")
+            "WHERE gameindex = (SELECT MAX(gameindex) from HISTORY WHERE gametype = '" + sel_gametype + "')"
+                                                                                                        "ORDER BY team DESC, pickorder ASC")
         time = c.fetchall()
         time = [i[0] for i in time]
         timesincelast = secs_to_days(time[0])
@@ -1319,16 +1321,16 @@ async def last(inter, sel_gametype: str = None):
         c.execute(
             "SELECT time "
             "FROM HISTORY "
-            "WHERE gameindex = (SELECT MAX(gameindex) from HISTORY WHERE gametype = '"+sel_gametype+"')"
-            "ORDER BY team DESC, pickorder ASC")
+            "WHERE gameindex = (SELECT MAX(gameindex) from HISTORY WHERE gametype = '" + sel_gametype + "')"
+                                                                                                        "ORDER BY team DESC, pickorder ASC")
         date = c.fetchall()
         date = [i[0] for i in date]
 
         c.execute(
             "SELECT gametype "
             "FROM HISTORY "
-            "WHERE gameindex = (SELECT MAX(gameindex) from HISTORY WHERE gametype = '"+sel_gametype+"')"
-            "ORDER BY team DESC, pickorder ASC")
+            "WHERE gameindex = (SELECT MAX(gameindex) from HISTORY WHERE gametype = '" + sel_gametype + "')"
+                                                                                                        "ORDER BY team DESC, pickorder ASC")
         gametype = c.fetchall()
         gametype = [i[0] for i in gametype]
 
@@ -1459,29 +1461,62 @@ async def maps(inter, gametype):
     parsedresponse = parsedresponse.replace("**", '')
 
     await inter.send(parsedresponse)
+
+
 ###################################################################################################################
 # Retrieves 2 maps for each team and provides TB
 ###################################################################################################################
 
 @bot.slash_command(description="Choose Maps")
 async def randmap(inter, gametype: str = 'ctf'):
-    c.execute("SELECT map FROM maps WHERE map IN (SELECT map FROM maps WHERE type = 'Order' ORDER BY RANDOM() LIMIT 2)")
-    order_maps = c.fetchall()
+    if gametype == "face":
 
-    c.execute("SELECT map FROM maps WHERE map IN (SELECT map FROM maps WHERE type = 'Chaos' ORDER BY RANDOM() LIMIT 2)")
-    chaos_maps = c.fetchall()
+        embed = disnake.Embed(
+            title="FacingWorlds",
+            colour=0xF0C43F,
+        )
 
-    c.execute("SELECT map FROM maps WHERE map IN (SELECT map FROM maps WHERE type = 'TB' ORDER BY RANDOM() LIMIT 2)")
-    tb_map = c.fetchone()
+        embed.add_field(name="Red maps: ", value=str("FacingWorlds"), inline=False)
+        embed.add_field(name="Blue maps: ", value=str("FacingWorlds"), inline=False)
+        embed.add_field(name="Tie Breaker: ", value=str("FacingWorlds"), inline=False)
+        embed.set_image(url="https://cdn.discordapp.com/attachments/482012169911664642/1077784674266529905/Face.webp")
+        await inter.send(embed=embed)
 
-    embed = disnake.Embed(
+    elif gametype == "xios":
+        embed = disnake.Embed(
+            title="For Xios:",
+            colour=0xF0C43F,
+        )
+
+        embed.add_field(name="Red maps: ", value=str("Grendelkeep"), inline=False)
+        embed.add_field(name="Blue maps: ", value=str("Azcanize"), inline=False)
+        embed.add_field(name="Tie Breaker: ", value=str("Bleak"), inline=False)
+        await inter.send(embed=embed)
+
+    else:
+
+        c.execute(
+            "SELECT map FROM maps WHERE map IN (SELECT map FROM maps WHERE type = 'Order' ORDER BY RANDOM() LIMIT 2)")
+        order_maps = c.fetchall()
+
+        c.execute(
+            "SELECT map FROM maps WHERE map IN (SELECT map FROM maps WHERE type = 'Chaos' ORDER BY RANDOM() LIMIT 2)")
+        chaos_maps = c.fetchall()
+
+        c.execute(
+            "SELECT map FROM maps WHERE map IN (SELECT map FROM maps WHERE type = 'TB' ORDER BY RANDOM() LIMIT 1)")
+        tb_map = c.fetchone()
+
+        embed = disnake.Embed(
             title="Random Maps",
             colour=0xF0C43F,
         )
-    embed.add_field(name="Red maps: ", value=str(order_maps[0][0]) + "\n" + str(chaos_maps[0][0]), inline=False)
-    embed.add_field(name="Blue maps: ", value=str(order_maps[1][0]) + "\n" + str(chaos_maps[1][0]), inline=False)
-    embed.add_field(name="Tie Breaker: ", value=str(tb_map[0]), inline=False)
-    await inter.send(embed=embed)
+        embed.add_field(name="Red maps: ", value=str(order_maps[0][0]) + "\n" + str(chaos_maps[0][0]), inline=False)
+        embed.add_field(name="Blue maps: ", value=str(order_maps[1][0]) + "\n" + str(chaos_maps[1][0]), inline=False)
+        # embed.add_field(name="Tie Breaker: ", value=str(tb_map[0]), inline=False)
+        await inter.send(embed=embed)
+
+
 ###################################################################################################################
 # Adds available map to pool
 ###################################################################################################################
@@ -1514,6 +1549,7 @@ async def delmap(inter, gametype, map):
     await inter.send(str(map) + ' removed from ' + str(gametype))
     return ()
 
+
 ###################################################################################################################
 # Promotes a specific pick up game
 ###################################################################################################################
@@ -1540,37 +1576,38 @@ async def promote(inter, gametype):
 
     await inter.send(f'@here Only {remaining} needed for **{gametype}**', view=buttons)
 
+
 ###################################################################################################################
 # Retrieves avg ctf stats
 ###################################################################################################################
-#!#!#!#!#!#! CHANGE TO UT_ID (FROM SQLITE) INSTEAD OF NAME
+# !#!#!#!#!#! CHANGE TO UT_ID (FROM SQLITE) INSTEAD OF NAME
 
 @bot.slash_command(description="Show avg ctf stats for user")
 async def ctfpower(inter, user):
-    c2.execute("SELECT * FROM ctf_agg WHERE playername = '"+str(user)+"'")
+    c2.execute("SELECT * FROM ctf_agg WHERE playername = '" + str(user) + "'")
     data = c2.fetchone()
     print(data)
 
     name = data[0]
     player_id = data[1]
-    avg_win = round(data[2],2)
+    avg_win = round(data[2], 2)
     num_matches = data[3]
-    avg_damage = round(data[4],0)
-    avg_kills = round(data[5],2)
-    avg_deaths = round(data[6],2)
-    avg_kdr = round((avg_kills/avg_deaths),2)
-    avg_returns = round(data[8],2)
-    avg_fc_kills = round(data[9],2)
-    avg_grabs = round(data[10],2)
-    avg_caps = round(data[11],2)
-    avg_assists = round(data[12],2)
+    avg_damage = round(data[4], 0)
+    avg_kills = round(data[5], 2)
+    avg_deaths = round(data[6], 2)
+    avg_kdr = round((avg_kills / avg_deaths), 2)
+    avg_returns = round(data[8], 2)
+    avg_fc_kills = round(data[9], 2)
+    avg_grabs = round(data[10], 2)
+    avg_caps = round(data[11], 2)
+    avg_assists = round(data[12], 2)
 
     embed = disnake.Embed(
-            title="CTF Power for " + str(name) + " overall ",
-            url="https://ut4stats.com/player_history/"+str(player_id)+"",
-            description="**Total matches: **" + str(num_matches) + "\n**W/L Ratio: **" + str(avg_win),
-            colour=0xF0C43F,
-        )
+        title="CTF Power for " + str(name) + " overall ",
+        url="https://ut4stats.com/player_history/" + str(player_id) + "",
+        description="**Total matches: **" + str(num_matches) + "\n**W/L Ratio: **" + str(avg_win),
+        colour=0xF0C43F,
+    )
     embed.add_field(name="Kills", value=str(avg_kills), inline=True)
     embed.add_field(name="Deaths", value=str(avg_deaths), inline=True)
     embed.add_field(name="KDR", value=str(avg_kdr), inline=True)
@@ -1590,14 +1627,13 @@ async def ctfpower(inter, user):
 
 @bot.slash_command(description="Show last pick up game from server")
 async def latest(inter, gametype: str = ''):
-
     if gametype == "blitz":
         gametype = "UTFlagRunGame"
 
     c2.execute("SELECT servername, gamemode, redteamscore, blueteamscore, date, matchid, gamemap "
                "FROM utstats_match "
-               "WHERE servername LIKE '%UTPugs%' AND gamemode iLIKE '%"+str(gametype)+"%' "
-               "ORDER BY matchid DESC LIMIT 10")
+               "WHERE servername LIKE '%UTPugs%' AND gamemode iLIKE '%" + str(gametype) + "%' "
+                                                                                          "ORDER BY matchid DESC LIMIT 10")
 
     data = c2.fetchall()
 
@@ -1621,31 +1657,31 @@ async def latest(inter, gametype: str = ''):
     elif game_mode == "UTFlagRunGame":
         game_mode = "Blitz"
 
-
     c2.execute("SELECT p.playername "
                "FROM utstats_matchstats m, utstats_player p "
-               "WHERE p.playerid = m.playerid_id AND m.matchid_id = '"+str(match_id)+"' AND m.team = 'Red'")
+               "WHERE p.playerid = m.playerid_id AND m.matchid_id = '" + str(match_id) + "' AND m.team = 'Red'")
 
     red_team_players = c2.fetchall()
     red_team_players = parse_players(red_team_players)
 
     c2.execute("SELECT p.playername "
                "FROM utstats_matchstats m, utstats_player p "
-               "WHERE p.playerid = m.playerid_id AND m.matchid_id = '"+str(match_id)+"' AND m.team = 'Blue'")
+               "WHERE p.playerid = m.playerid_id AND m.matchid_id = '" + str(match_id) + "' AND m.team = 'Blue'")
 
     blue_team_players = c2.fetchall()
     blue_team_players = parse_players(blue_team_players)
 
     embed = disnake.Embed(
         title="Latest " + str(game_mode) + " on " + str(server_name),
-        url="https://ut4stats.com/match_summary/"+str(match_id)+"",
-        description="Date: " + str(date) + "\n Map: "+map_name+"",
+        url="https://ut4stats.com/match_summary/" + str(match_id) + "",
+        description="Date: " + str(date) + "\n Map: " + map_name + "",
         colour=0xF0C43F,
     )
-    embed.add_field(name="Red Team Score: "+str(red_team_score)+"", value=str(red_team_players), inline=True)
-    embed.add_field(name="Blue Team Score: "+str(blue_team_score)+"", value=str(blue_team_players), inline=False)
+    embed.add_field(name="Red Team Score: " + str(red_team_score) + "", value=str(red_team_players), inline=True)
+    embed.add_field(name="Blue Team Score: " + str(blue_team_score) + "", value=str(blue_team_players), inline=False)
 
     await inter.send(embed=embed, view=latest_buttons(gametype))
+
 
 ###################################################################################################################
 
@@ -1676,7 +1712,7 @@ class ctfpower_buttons(disnake.ui.View):
         avg_damage = round(data[4], 0)
         avg_kills = round(data[5], 2)
         avg_deaths = round(data[6], 2)
-        avg_kdr = round((avg_kills/avg_deaths), 2)
+        avg_kdr = round((avg_kills / avg_deaths), 2)
         avg_returns = round(data[8], 2)
         avg_fc_kills = round(data[9], 2)
         avg_grabs = round(data[10], 2)
@@ -1703,7 +1739,6 @@ class ctfpower_buttons(disnake.ui.View):
 
     @disnake.ui.button(label="Offense", style=disnake.ButtonStyle.green)
     async def offense(self, button: disnake.ui.Button, interaction: disnake.MessageInteraction):
-
         c2.execute("SELECT * FROM ctf_agg_position "
                    "WHERE playername = '" + str(self.user) + "' AND position = 'offense'")
 
@@ -1717,7 +1752,7 @@ class ctfpower_buttons(disnake.ui.View):
         avg_damage = round(data[4], 0)
         avg_kills = round(data[5], 2)
         avg_deaths = round(data[6], 2)
-        avg_kdr = round((avg_kills/avg_deaths), 2)
+        avg_kdr = round((avg_kills / avg_deaths), 2)
         avg_returns = round(data[8], 2)
         avg_fc_kills = round(data[9], 2)
         avg_grabs = round(data[10], 2)
@@ -1757,7 +1792,7 @@ class ctfpower_buttons(disnake.ui.View):
         avg_damage = round(data[4], 0)
         avg_kills = round(data[5], 2)
         avg_deaths = round(data[6], 2)
-        avg_kdr = round((avg_kills/avg_deaths), 2)
+        avg_kdr = round((avg_kills / avg_deaths), 2)
         avg_returns = round(data[8], 2)
         avg_fc_kills = round(data[9], 2)
         avg_grabs = round(data[10], 2)
@@ -1800,7 +1835,7 @@ class latest_buttons(disnake.ui.View):
         c2.execute("SELECT servername, gamemode, redteamscore, blueteamscore, date, matchid, gamemap "
                    "FROM utstats_match "
                    "WHERE servername LIKE '%UTPugs%' AND gamemode iLIKE '%" + str(gametype) + "%' "
-                   "ORDER BY matchid DESC LIMIT 10")
+                                                                                              "ORDER BY matchid DESC LIMIT 10")
 
         data = c2.fetchall()
 
@@ -1869,17 +1904,17 @@ class latest_buttons(disnake.ui.View):
         c2.execute("SELECT servername, gamemode, redteamscore, blueteamscore, date, matchid, gamemap "
                    "FROM utstats_match "
                    "WHERE servername LIKE '%UTPugs%' AND gamemode iLIKE '%" + str(gametype) + "%' "
-                   "ORDER BY matchid DESC LIMIT 10")
+                                                                                              "ORDER BY matchid DESC LIMIT 10")
 
         data = c2.fetchall()
 
-        server_name = data[0+int(number)][0]
-        game_mode = data[0+int(number)][1]
-        red_team_score = data[0+int(number)][2]
-        blue_team_score = data[0+int(number)][3]
-        date = data[0+int(number)][4]
-        match_id = data[0+int(number)][5]
-        map_name = data[0+int(number)][6]
+        server_name = data[0 + int(number)][0]
+        game_mode = data[0 + int(number)][1]
+        red_team_score = data[0 + int(number)][2]
+        blue_team_score = data[0 + int(number)][3]
+        date = data[0 + int(number)][4]
+        match_id = data[0 + int(number)][5]
+        map_name = data[0 + int(number)][6]
 
         est = pytz.timezone('US/Eastern')
         date = date.astimezone(est).strftime("%b %d, %Y %I:%M%p %Z")
@@ -1918,7 +1953,6 @@ class latest_buttons(disnake.ui.View):
                         inline=False)
 
         await interaction.response.edit_message(embed=embed, view=self)
-
 
 
 # Define buttons for use in history (/last) command
@@ -2019,7 +2053,6 @@ class last_buttons(disnake.ui.View):
 
         # update the message
         await interaction.response.edit_message(embed=embed, view=self)
-
 
 
 # Class for join/leave buttons
@@ -2155,163 +2188,162 @@ async def on_reaction_add(reaction, user):
         #     await reset_function(user.id, reaction.message.guild.name, reaction.message.guild.id, channel, channelid)
 
 
-
-
 ###################################################################################################################
 ########
 # Monitor SQL for changes. Send latest to discord if found.
 ########
 ###################################################################################################################
 
-@bot.slash_command(description="Show last pick up game from server")
-async def update(inter, gametype: str = ''):
-
-    await inter.send('Live updates enabled')
-    asyncio.create_task(background_code())
-
-
-async def background_code():
-
-    match_id_2 = None
-
-    while True:
-
-        c2.execute("SELECT matchid "
-                   "FROM utstats_match "
-                   "WHERE servername LIKE '%UTPugs%' "
-                   "ORDER BY matchid DESC LIMIT 1")
-
-        match_id_1 = c2.fetchone()
-
-        if match_id_2:
-            if match_id_1[0] != match_id_2[0]:
-                print("SQL UPDATED!")
-                c2.execute("SELECT servername, gamemode, redteamscore, blueteamscore, date, matchid, gamemap "
-                           "FROM utstats_match "
-                           "WHERE servername LIKE '%UTPugs%' AND gamemode iLIKE '%%' "
-                           "ORDER BY matchid DESC LIMIT 10")
-
-                data = c2.fetchall()
-
-                server_name = data[0][0]
-                game_mode = data[0][1]
-                red_team_score = data[0][2]
-                blue_team_score = data[0][3]
-                date = data[0][4]
-                match_id = data[0][5]
-                map_name = data[0][6]
-
-                est = pytz.timezone('US/Eastern')
-                date = date.astimezone(est).strftime("%b %d, %Y %I:%M%p %Z")
-
-                if game_mode == "UTCTFGameMode":
-                    game_mode = "CTF"
-                elif game_mode == "UTDuelGame":
-                    game_mode = "Duel"
-                elif game_mode == "Elimination_113_C":
-                    game_mode = "Elimination"
-                elif game_mode == "UTFlagRunGame":
-                    game_mode = "Blitz"
-
-                c2.execute("SELECT p.playername "
-                           "FROM utstats_matchstats m, utstats_player p "
-                           "WHERE p.playerid = m.playerid_id AND m.matchid_id = '" + str(match_id) + "' AND m.team = 'Red'")
-
-                red_team_players = c2.fetchall()
-                red_team_players = parse_players(red_team_players)
-
-                c2.execute("SELECT p.playername "
-                           "FROM utstats_matchstats m, utstats_player p "
-                           "WHERE p.playerid = m.playerid_id "
-                           "AND m.matchid_id = '" + str(match_id) + "' AND m.team = 'Blue'")
-
-                blue_team_players = c2.fetchall()
-                blue_team_players = parse_players(blue_team_players)
-
-                embed = disnake.Embed(
-                    title="Latest " + str(game_mode) + " on " + str(server_name),
-                    url="https://ut4stats.com/match_summary/" + str(match_id) + "",
-                    description="Date: " + str(date) + "\n Map: " + map_name + "",
-                    colour=0xF0C43F,
-                )
-                embed.add_field(name="Red Team Score: " + str(red_team_score) + "", value=str(red_team_players),
-                                inline=True)
-                embed.add_field(name="Blue Team Score: " + str(blue_team_score) + "", value=str(blue_team_players),
-                                inline=False)
-
-                channel = bot.get_channel(192460940409700352)
-
-                await channel.send(embed=embed)
-
-        await asyncio.sleep(60)
-
-        c2.execute("SELECT matchid "
-                   "FROM utstats_match "
-                   "WHERE servername LIKE '%UTPugs%' "
-                   "ORDER BY matchid DESC LIMIT 1")
-
-        match_id_2 = c2.fetchone()
-
-        if match_id_1[0] != match_id_2[0]:
-            print("SQL UPDATED!")
-            c2.execute("SELECT servername, gamemode, redteamscore, blueteamscore, date, matchid, gamemap "
-                       "FROM utstats_match "
-                       "WHERE servername LIKE '%UTPugs%' AND gamemode iLIKE '%%' "
-                       "ORDER BY matchid DESC LIMIT 10")
-
-            data = c2.fetchall()
-
-            server_name = data[0][0]
-            game_mode = data[0][1]
-            red_team_score = data[0][2]
-            blue_team_score = data[0][3]
-            date = data[0][4]
-            match_id = data[0][5]
-            map_name = data[0][6]
-
-            est = pytz.timezone('US/Eastern')
-            date = date.astimezone(est).strftime("%b %d, %Y %I:%M%p %Z")
-
-            if game_mode == "UTCTFGameMode":
-                game_mode = "CTF"
-            elif game_mode == "UTDuelGame":
-                game_mode = "Duel"
-            elif game_mode == "Elimination_113_C":
-                game_mode = "Elimination"
-            elif game_mode == "UTFlagRunGame":
-                game_mode = "Blitz"
-
-            c2.execute("SELECT p.playername "
-                       "FROM utstats_matchstats m, utstats_player p "
-                       "WHERE p.playerid = m.playerid_id AND m.matchid_id = '" + str(match_id) + "' AND m.team = 'Red'")
-
-            red_team_players = c2.fetchall()
-            red_team_players = parse_players(red_team_players)
-
-            c2.execute("SELECT p.playername "
-                       "FROM utstats_matchstats m, utstats_player p "
-                       "WHERE p.playerid = m.playerid_id "
-                       "AND m.matchid_id = '" + str(match_id) + "' AND m.team = 'Blue'")
-
-            blue_team_players = c2.fetchall()
-            blue_team_players = parse_players(blue_team_players)
-
-            embed = disnake.Embed(
-                title="Latest " + str(game_mode) + " on " + str(server_name),
-                url="https://ut4stats.com/match_summary/" + str(match_id) + "",
-                description="Date: " + str(date) + "\n Map: " + map_name + "",
-                colour=0xF0C43F,
-            )
-            embed.add_field(name="Red Team Score: " + str(red_team_score) + "", value=str(red_team_players),
-                            inline=True)
-            embed.add_field(name="Blue Team Score: " + str(blue_team_score) + "", value=str(blue_team_players),
-                            inline=False)
-
-            channel = bot.get_channel(192460940409700352)
-
-            await channel.send(embed=embed)
-
-        await asyncio.sleep(60)
+# @bot.slash_command(description="Show last pick up game from server")
+# async def update(inter, gametype: str = ''):
+#     await inter.send('Live updates enabled')
+#     asyncio.create_task(background_code())
+#
+#
+# async def background_code():
+#     match_id_2 = None
+#
+#     while True:
+#
+#         c2.execute("SELECT matchid "
+#                    "FROM utstats_match "
+#                    "WHERE servername LIKE '%UTPugs%' "
+#                    "ORDER BY matchid DESC LIMIT 1")
+#
+#         match_id_1 = c2.fetchone()
+#
+#         if match_id_2:
+#             if match_id_1[0] != match_id_2[0]:
+#                 print("SQL UPDATED!")
+#                 c2.execute("SELECT servername, gamemode, redteamscore, blueteamscore, date, matchid, gamemap "
+#                            "FROM utstats_match "
+#                            "WHERE servername LIKE '%UTPugs%' AND gamemode iLIKE '%%' "
+#                            "ORDER BY matchid DESC LIMIT 10")
+#
+#                 data = c2.fetchall()
+#
+#                 server_name = data[0][0]
+#                 game_mode = data[0][1]
+#                 red_team_score = data[0][2]
+#                 blue_team_score = data[0][3]
+#                 date = data[0][4]
+#                 match_id = data[0][5]
+#                 map_name = data[0][6]
+#
+#                 est = pytz.timezone('US/Eastern')
+#                 date = date.astimezone(est).strftime("%b %d, %Y %I:%M%p %Z")
+#
+#                 if game_mode == "UTCTFGameMode":
+#                     game_mode = "CTF"
+#                 elif game_mode == "Elimination_113_C":
+#                     game_mode = "Elimination"
+#                 elif game_mode == "UTFlagRunGame":
+#                     game_mode = "Blitz"
+#                 elif game_mode == "UTDuelGame":
+#                     game_mode = "Duel"
+#
+#                 c2.execute("SELECT p.playername "
+#                            "FROM utstats_matchstats m, utstats_player p "
+#                            "WHERE p.playerid = m.playerid_id AND m.matchid_id = '" + str(
+#                     match_id) + "' AND m.team = 'Red'")
+#
+#                 red_team_players = c2.fetchall()
+#                 red_team_players = parse_players(red_team_players)
+#
+#                 c2.execute("SELECT p.playername "
+#                            "FROM utstats_matchstats m, utstats_player p "
+#                            "WHERE p.playerid = m.playerid_id "
+#                            "AND m.matchid_id = '" + str(match_id) + "' AND m.team = 'Blue'")
+#
+#                 blue_team_players = c2.fetchall()
+#                 blue_team_players = parse_players(blue_team_players)
+#
+#                 embed = disnake.Embed(
+#                     title="Latest " + str(game_mode) + " on " + str(server_name),
+#                     url="https://ut4stats.com/match_summary/" + str(match_id) + "",
+#                     description="Date: " + str(date) + "\n Map: " + map_name + "",
+#                     colour=0xF0C43F,
+#                 )
+#                 embed.add_field(name="Red Team Score: " + str(red_team_score) + "", value=str(red_team_players),
+#                                 inline=True)
+#                 embed.add_field(name="Blue Team Score: " + str(blue_team_score) + "", value=str(blue_team_players),
+#                                 inline=False)
+#
+#                 channel = bot.get_channel(192460940409700352)
+#
+#                 if game_mode == "CTF" or game_mode == "Elimination":
+#                     await channel.send(embed=embed)
+#
+#         await asyncio.sleep(60)
+#
+#         c2.execute("SELECT matchid "
+#                    "FROM utstats_match "
+#                    "WHERE servername LIKE '%UTPugs%' "
+#                    "ORDER BY matchid DESC LIMIT 1")
+#
+#         match_id_2 = c2.fetchone()
+#
+#         if match_id_1[0] != match_id_2[0]:
+#             print("SQL UPDATED!")
+#             c2.execute("SELECT servername, gamemode, redteamscore, blueteamscore, date, matchid, gamemap "
+#                        "FROM utstats_match "
+#                        "WHERE servername LIKE '%UTPugs%' AND gamemode iLIKE '%%' "
+#                        "ORDER BY matchid DESC LIMIT 10")
+#
+#             data = c2.fetchall()
+#
+#             server_name = data[0][0]
+#             game_mode = data[0][1]
+#             red_team_score = data[0][2]
+#             blue_team_score = data[0][3]
+#             date = data[0][4]
+#             match_id = data[0][5]
+#             map_name = data[0][6]
+#
+#             est = pytz.timezone('US/Eastern')
+#             date = date.astimezone(est).strftime("%b %d, %Y %I:%M%p %Z")
+#
+#             if game_mode == "UTCTFGameMode":
+#                 game_mode = "CTF"
+#             elif game_mode == "UTDuelGame":
+#                 game_mode = "Duel"
+#             elif game_mode == "Elimination_113_C":
+#                 game_mode = "Elimination"
+#             elif game_mode == "UTFlagRunGame":
+#                 game_mode = "Blitz"
+#
+#             c2.execute("SELECT p.playername "
+#                        "FROM utstats_matchstats m, utstats_player p "
+#                        "WHERE p.playerid = m.playerid_id AND m.matchid_id = '" + str(match_id) + "' AND m.team = 'Red'")
+#
+#             red_team_players = c2.fetchall()
+#             red_team_players = parse_players(red_team_players)
+#
+#             c2.execute("SELECT p.playername "
+#                        "FROM utstats_matchstats m, utstats_player p "
+#                        "WHERE p.playerid = m.playerid_id "
+#                        "AND m.matchid_id = '" + str(match_id) + "' AND m.team = 'Blue'")
+#
+#             blue_team_players = c2.fetchall()
+#             blue_team_players = parse_players(blue_team_players)
+#
+#             embed = disnake.Embed(
+#                 title="Latest " + str(game_mode) + " on " + str(server_name),
+#                 url="https://ut4stats.com/match_summary/" + str(match_id) + "",
+#                 description="Date: " + str(date) + "\n Map: " + map_name + "",
+#                 colour=0xF0C43F,
+#             )
+#             embed.add_field(name="Red Team Score: " + str(red_team_score) + "", value=str(red_team_players),
+#                             inline=True)
+#             embed.add_field(name="Blue Team Score: " + str(blue_team_score) + "", value=str(blue_team_players),
+#                             inline=False)
+#
+#             channel = bot.get_channel(192460940409700352)
+#
+#             if game_mode == "CTF" or game_mode == "Elimination":
+#                 await channel.send(embed=embed)
+#
+#         await asyncio.sleep(60)
 
 
 bot.run(str(discordtoken))
